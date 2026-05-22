@@ -191,7 +191,9 @@ def serve() -> None:
     o Henrique pode gerenciar várias campanhas na mesma sessão.
     """
     app = build_app()
-    server = make_server(settings.APPROVAL_HOST, settings.APPROVAL_PORT, app)
+    # threaded=True: atende requisições em paralelo (html/css/js/api + polling).
+    # Sem isso o servidor single-threaded trava com o browser.
+    server = make_server(settings.APPROVAL_HOST, settings.APPROVAL_PORT, app, threaded=True)
     url = f"http://{settings.APPROVAL_HOST}:{settings.APPROVAL_PORT}/"
 
     print(f"✓ Central de controle Mendes & Vaz em {url}")
