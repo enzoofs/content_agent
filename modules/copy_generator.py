@@ -88,11 +88,16 @@ Responda APENAS com um JSON válido. O JSON deve ser um objeto com a chave "opti
 """
 
 
-def _build_user_message(briefing: dict) -> str:
-    """Monta o prompt do usuário a partir dos dados do briefing validado."""
+def _build_user_message(briefing: dict, nota_ajuste: str = "") -> str:
+    """
+    Monta o prompt do usuário a partir do briefing validado.
+
+    Se `nota_ajuste` for fornecida (regeneração após pedido do Henrique), ela é
+    anexada como instrução prioritária.
+    """
     tema = briefing["tema_especifico"] or "(livre — você escolhe a pauta)"
     referencias = briefing["referencias"] or "(nenhuma)"
-    return (
+    msg = (
         "Gere 3 variações de copy para um post seguindo este briefing:\n\n"
         f"- Área do direito: {briefing['area_direito']}\n"
         f"- Perfil do cliente ideal: {briefing['perfil_cliente_ideal']}\n"
@@ -104,6 +109,12 @@ def _build_user_message(briefing: dict) -> str:
         "Lembre-se dos limites: headline <=60 chars, subheadline <=80, "
         "body <=150, cta <=40, caption <=2200, até 20 hashtags."
     )
+    if nota_ajuste.strip():
+        msg += (
+            "\n\nAJUSTE SOLICITADO PELO CLIENTE (priorize ao máximo este pedido): "
+            f"{nota_ajuste.strip()}"
+        )
+    return msg
 
 
 def _parse_and_validate(raw_text: str) -> list[dict]:
@@ -136,12 +147,13 @@ def _parse_and_validate(raw_text: str) -> list[dict]:
     return validadas
 
 
-def generate(briefing: dict) -> list[dict]:
+def generate(briefing: dict, nota_ajuste: str = "") -> list[dict]:
     """
     Gera variações de copy a partir do briefing validado.
 
     Args:
         briefing: saída de briefing_parser.parse.
+        nota_ajuste: pedido de ajuste do Henrique (regeneração). Vazio na 1ª geração.
 
     Returns:
         Lista de dicts conforme COPY_SCHEMA. Também salva em
@@ -158,7 +170,7 @@ def generate(briefing: dict) -> list[dict]:
         )
 
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
-    user_message = _build_user_message(briefing)
+    user_message = _build_user_message(briefing, nota_ajuste)
 
     ultima_excecao: Exception | None = None
     # 1 tentativa + até 2 retentativas (total 3)
