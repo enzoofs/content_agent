@@ -1,0 +1,33 @@
+# Variáveis de ambiente — NUNCA commitar
+.env
+
+# Documentos internos / confidenciais — não versionar
+*.pdf
+timelabs_spec_claudecode.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# Saídas geradas pelo pipeline (artefatos de campanha)
+campaigns/*/
+exports/*/
+exports/*.png
+exports/*.json
+!campaigns/.gitkeep
+!exports/.gitkeep
+
+# Playwright
+.playwright/
+
+# SO / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

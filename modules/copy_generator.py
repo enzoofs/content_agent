@@ -1,0 +1,243 @@
+"""
+modules/copy_generator.py — Geração de copy via OpenAI.
+
+NOTA DE STACK: a spec original previa Claude API (claude-sonnet-4-6). Nesta fase
+trocamos para a OpenAI (sem chave Anthropic disponível). O modelo é configurável
+em config.settings.OPENAI_MODEL. O system prompt e o schema de saída permanecem
+idênticos aos da spec.
+
+Recebe o briefing validado e retorna NUM_COPY_OPTIONS variações completas de copy.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import unicodedata
+
+from openai import OpenAI
+
+from config import settings
+from modules import utils
+
+# Limite máximo de hashtags por post (spec)
+MAX_HASHTAGS = 20
+
+
+def normalize_hashtags(tags: list) -> list[str]:
+    """
+    Normaliza hashtags para o padrão de busca: minúsculas, sem acento, sem '#',
+    sem espaços/caracteres especiais. Remove vazias e duplicatas (preservando a
+    ordem) e limita a MAX_HASHTAGS.
+
+    Ex.: ["#Direito Médico", "clínicasBH"] -> ["direitomedico", "clinicasbh"]
+    """
+    vistos: set[str] = set()
+    limpas: list[str] = []
+    for tag in tags:
+        if not isinstance(tag, str):
+            continue
+        # Remove acentos
+        sem_acento = (
+            unicodedata.normalize("NFKD", tag).encode("ascii", "ignore").decode("ascii")
+        )
+        # Minúsculas e mantém apenas a-z 0-9 (descarta '#', espaços, pontuação)
+        limpa = re.sub(r"[^a-z0-9]", "", sem_acento.lower())
+        if limpa and limpa not in vistos:
+            vistos.add(limpa)
+            limpas.append(limpa)
+    return limpas[:MAX_HASHTAGS]
+
+# Schema de uma variação de copy
+COPY_SCHEMA: dict[str, type] = {
+    "option_id": int,        # 1, 2 ou 3
+    "headline": str,         # máx 60 chars
+    "subheadline": str,      # máx 80 chars, pode ser ""
+    "body": str,             # máx 150 chars (square/portrait)
+    "caption": str,          # máx 2200 chars
+    "cta": str,              # máx 40 chars
+    "hashtags": list,        # list[str] sem o #, máx 20
+    "image_prompt": str,     # inglês, máx 400 chars
+    "style_notes": str,      # notas para o compositor
+}
+
+# Campos obrigatórios em cada variação retornada pelo modelo
+_REQUIRED_FIELDS = set(COPY_SCHEMA) - {"option_id"}
+
+# System prompt base (idêntico à spec — independe do provedor de LLM)
+SYSTEM_PROMPT = """\
+Você é o especialista em marketing jurídico do escritório Mendes & Vaz — Sociedade de Advogados (Belo Horizonte, MG). O escritório atua em direito civil, médico e empresarial, com foco crescente em direito médico.
+
+IDENTIDADE DO ESCRITÓRIO:
+- Tom: institucional, confiança, autoridade. Nunca informal demais, nunca frio demais.
+- Público: profissionais de saúde (médicos, dentistas, hospitais), empresários, pessoas físicas com causas relevantes.
+- Diferencial: atendimento personalizado, expertise jurídica sólida, localização em BH.
+- Nunca use: jargão jurídico incompreensível para leigos, linguagem sensacionalista, promessas de resultado.
+
+REGRAS DE COPY:
+1. O headline precisa capturar atenção em menos de 3 segundos
+2. O body precisa ser legível em 10 segundos
+3. A caption deve aprofundar o tema com valor real — não apenas repetir o post
+4. O CTA deve ser específico e de baixo atrito
+5. EVITE "AI slop": nada de frases genéricas e vazias ("nossa equipe pode ajudar", "soluções sob medida", "esteja sempre protegido"). Seja concreto — cite situações reais, consequências práticas e ganhos tangíveis. Escreva com a autoridade de quem domina o assunto, não como um anúncio genérico.
+6. Hashtags: forneça de 8 a 15. TODAS em minúsculas, SEM acentos, SEM espaços, SEM caracteres especiais e SEM erros de digitação (cada hashtag é uma palavra única ou palavras coladas, ex.: "direitomedico", "advocaciabh"). Misture três tipos: termos amplos da área, termos de nicho do tema específico, e termos locais quando fizer sentido ("belohorizonte", "bh", "minasgerais"). Nunca crie hashtags cafonas, com números promocionais ou inventadas.
+7. O image_prompt deve descrever uma cena/atmosfera PROFISSIONAL e ELEGANTE — nunca clichê jurídico (balança da justiça, martelo). Prefira: escritório elegante, pessoas em conversa séria, detalhes arquitetônicos sofisticados, texturas e atmosfera.
+
+FORMATO DE RESPOSTA:
+Responda APENAS com um JSON válido. O JSON deve ser um objeto com a chave "options" contendo uma lista de exatamente 3 objetos, cada um com os campos: option_id (1,2,3), headline, subheadline, body, caption, cta, hashtags (lista de strings sem #), image_prompt (em inglês), style_notes. Sem texto antes ou depois. Sem markdown.\
+"""
+
+
+def _build_user_message(briefing: dict) -> str:
+    """Monta o prompt do usuário a partir dos dados do briefing validado."""
+    tema = briefing["tema_especifico"] or "(livre — você escolhe a pauta)"
+    referencias = briefing["referencias"] or "(nenhuma)"
+    return (
+        "Gere 3 variações de copy para um post seguindo este briefing:\n\n"
+        f"- Área do direito: {briefing['area_direito']}\n"
+        f"- Perfil do cliente ideal: {briefing['perfil_cliente_ideal']}\n"
+        f"- Tom: {briefing['tom']}\n"
+        f"- Objetivo: {briefing['objetivo']}\n"
+        f"- Formato do post: {briefing['formato']} ({briefing['num_slides']} slide(s))\n"
+        f"- Tema específico: {tema}\n"
+        f"- Referências/observações: {referencias}\n\n"
+        "Lembre-se dos limites: headline <=60 chars, subheadline <=80, "
+        "body <=150, cta <=40, caption <=2200, até 20 hashtags."
+    )
+
+
+def _parse_and_validate(raw_text: str) -> list[dict]:
+    """
+    Parseia a resposta do modelo como JSON e valida as 3 variações.
+
+    Raises:
+        ValueError: se o JSON for inválido ou faltarem campos/opções.
+    """
+    data = json.loads(raw_text)  # pode lançar json.JSONDecodeError (subclasse de ValueError)
+
+    # Aceita {"options": [...]} ou diretamente [...]
+    options = data["options"] if isinstance(data, dict) else data
+    if not isinstance(options, list) or len(options) != settings.NUM_COPY_OPTIONS:
+        raise ValueError(
+            f"Esperado {settings.NUM_COPY_OPTIONS} variações; recebido: "
+            f"{len(options) if isinstance(options, list) else type(options).__name__}."
+        )
+
+    validadas: list[dict] = []
+    for i, op in enumerate(options, start=1):
+        faltando = _REQUIRED_FIELDS - set(op)
+        if faltando:
+            raise ValueError(f"Variação {i} sem os campos: {sorted(faltando)}.")
+        op["option_id"] = i  # normaliza o id sequencialmente
+        if not isinstance(op["hashtags"], list):
+            raise ValueError(f"Variação {i}: 'hashtags' deve ser uma lista.")
+        op["hashtags"] = normalize_hashtags(op["hashtags"])  # limpa acento/casing/#
+        validadas.append({campo: op[campo] for campo in COPY_SCHEMA})
+    return validadas
+
+
+def generate(briefing: dict) -> list[dict]:
+    """
+    Gera variações de copy a partir do briefing validado.
+
+    Args:
+        briefing: saída de briefing_parser.parse.
+
+    Returns:
+        Lista de dicts conforme COPY_SCHEMA. Também salva em
+        campaigns/{campaign_id}/copy_v1.json.
+
+    Raises:
+        RuntimeError: se a API falhar ou o JSON for inválido após as retentativas.
+    """
+    campaign_id = briefing["campaign_id"]
+
+    if not settings.OPENAI_API_KEY:
+        raise RuntimeError(
+            "OPENAI_API_KEY não configurada. Defina-a no arquivo .env antes de gerar copy."
+        )
+
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    user_message = _build_user_message(briefing)
+
+    ultima_excecao: Exception | None = None
+    # 1 tentativa + até 2 retentativas (total 3)
+    for tentativa in range(1, 4):
+        try:
+            utils.log(campaign_id, f"copy_generator: tentativa {tentativa} (modelo {settings.OPENAI_MODEL})")
+            response = client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                max_tokens=settings.COPY_MAX_TOKENS,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+            )
+            raw_text = response.choices[0].message.content
+            opcoes = _parse_and_validate(raw_text)
+            _salvar(campaign_id, opcoes)
+            utils.log(campaign_id, "copy_generator: 3 variações geradas e salvas em copy_v1.json")
+            return opcoes
+
+        except ValueError as e:
+            # Erro de parsing/validação — tenta de novo
+            ultima_excecao = e
+            utils.log(campaign_id, f"copy_generator: JSON inválido na tentativa {tentativa}: {e}")
+            print(f"⚠️  Copy: resposta inválida na tentativa {tentativa} — tentando novamente...")
+
+        except Exception as e:
+            ultima_excecao = e
+            utils.log(campaign_id, f"copy_generator: erro de API na tentativa {tentativa}: {e}")
+
+            # Erros não-retentáveis (cota/auth): falha imediata com orientação.
+            mensagem_fatal = _erro_fatal(e)
+            if mensagem_fatal:
+                utils.log(campaign_id, f"copy_generator: erro fatal — {mensagem_fatal}")
+                raise RuntimeError(mensagem_fatal) from e
+
+            print(f"⚠️  Copy: erro na OpenAI API (tentativa {tentativa}): {e}")
+
+    msg = (
+        "❌ Falha ao gerar copy após 3 tentativas. "
+        f"Último erro: {ultima_excecao}. "
+        "Verifique sua OPENAI_API_KEY e a conexão."
+    )
+    utils.log(campaign_id, msg)
+    raise RuntimeError(msg)
+
+
+def _erro_fatal(e: Exception) -> str | None:
+    """
+    Retorna uma mensagem de erro clara se a exceção for NÃO-retentável
+    (cota esgotada, chave inválida, sem permissão); senão, None (pode retentar).
+    """
+    code = getattr(e, "code", None)
+    status = getattr(e, "status_code", None)
+
+    if code == "insufficient_quota":
+        return (
+            "❌ OpenAI: cota/créditos esgotados (insufficient_quota). "
+            "A geração de copy não vai funcionar até a conta ter saldo. "
+            "Adicione créditos em https://platform.openai.com/account/billing "
+            "e confirme que o método de pagamento está ativo."
+        )
+    if code in {"invalid_api_key"} or status in {401}:
+        return (
+            "❌ OpenAI: chave inválida ou não autorizada (401). "
+            "Confira o valor de OPENAI_API_KEY no arquivo .env."
+        )
+    if status in {403}:
+        return (
+            "❌ OpenAI: acesso negado (403) — a chave pode não ter permissão "
+            f"para o modelo {settings.OPENAI_MODEL}."
+        )
+    return None
+
+
+def _salvar(campaign_id: str, opcoes: list[dict]) -> None:
+    """Salva as variações em campaigns/{campaign_id}/copy_v1.json."""
+    destino = utils.campaign_dir(campaign_id) / "copy_v1.json"
+    destino.write_text(
+        json.dumps(opcoes, ensure_ascii=False, indent=2), encoding="utf-8"
+    )

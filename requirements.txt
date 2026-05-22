@@ -1,0 +1,18 @@
+# Geração de copy — trocamos Claude/Anthropic por OpenAI (sem chave Anthropic disponível)
+# >=1.55.3: compatível com httpx>=0.28 (versões antigas passavam 'proxies', removido no httpx)
+openai>=1.55.3
+
+# HTTP para a Ideogram API e download de imagens
+requests>=2.31.0
+
+# Servidor local da interface de aprovação
+flask>=3.0.0
+
+# Composição final: renderiza HTML/CSS -> PNG
+playwright>=1.44.0
+
+# Carrega variáveis de ambiente do .env
+python-dotenv>=1.0.0
+
+# Manipulação de imagens (placeholders de arte, validações)
+pillow>=10.0.0

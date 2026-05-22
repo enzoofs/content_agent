@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<!-- carousel_slide.html — Slide de carrossel 1080×1080.
+     Variante do post quadrado para slides sequenciais: subtítulo como
+     "eyebrow" no topo, headline e corpo na base. Mesmas variáveis.
+     Substituição via string.Template ($var). -->
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Montserrat:wght@400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: ${width}px;
+    height: ${height}px;
+    overflow: hidden;
+    position: relative;
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  .bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('$background_image');
+    background-size: cover;
+    background-position: center;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(26, 32, 56, 0.93) 0%,
+      rgba(26, 32, 56, 0.6) 55%,
+      rgba(26, 32, 56, 0.35) 100%
+    );
+  }
+
+  .subheadline {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .content {
+    position: absolute;
+    inset: 0;
+    padding: 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  .gold-rule {
+    width: 48px;
+    height: 3px;
+    background: $gold;
+    margin-bottom: 20px;
+  }
+
+  .headline {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 50px;
+    line-height: 1.15;
+    color: #FFFFFF;
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+  }
+
+  .body-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 1.65;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 28px;
+    max-width: 88%;
+  }
+
+  .cta {
+    display: inline-block;
+    padding: 12px 24px;
+    background: transparent;
+    border: 1.5px solid $gold;
+    color: $gold;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    width: fit-content;
+  }
+
+  .logo {
+    position: absolute;
+    bottom: 28px;
+    right: 28px;
+    height: 52px;
+    width: auto;
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="overlay"></div>
+  <div class="content">
+    <div class="gold-rule"></div>
+    <h1 class="headline">$headline</h1>
+    $subheadline_html
+    <p class="body-text">$body_text</p>
+    <div class="cta">$cta_text</div>
+  </div>
+  <img class="logo" src="$logo" alt="Mendes & Vaz">
+</body>
+</html>

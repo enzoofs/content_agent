@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aprovação de Conteúdo — Mendes &amp; Vaz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="Mendes & Vaz" class="brand-logo">
+      <div class="brand-text">
+        <span class="brand-name">Mendes &amp; Vaz</span>
+        <span class="brand-sub">Aprovação de Conteúdo</span>
+      </div>
+    </div>
+    <span id="status-badge" class="badge badge-pending">Aguardando aprovação</span>
+  </header>
+
+  <main>
+    <div id="campaign-meta" class="campaign-meta"></div>
+    <section id="cards" class="cards">
+      <p class="loading">Carregando variações…</p>
+    </section>
+  </main>
+
+  <!-- Modal de ampliação da imagem -->
+  <div id="modal" class="modal hidden">
+    <span class="modal-close" id="modal-close">&times;</span>
+    <img id="modal-img" src="" alt="Preview ampliado">
+  </div>
+
+  <!-- Tela de confirmação pós-aprovação -->
+  <div id="done-overlay" class="done-overlay hidden">
+    <div class="done-card">
+      <div class="done-check">✓</div>
+      <h2>Post aprovado</h2>
+      <p id="done-text">A variação foi exportada e está pronta para publicação.</p>
+      <p class="done-hint">Pode fechar esta janela.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
