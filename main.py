@@ -1,38 +1,29 @@
 """
-main.py — Entry point do pipeline Mendes & Vaz Social (Fase 1).
+main.py — Entry point do sistema Mendes & Vaz Social.
 
-Orquestra: briefing -> copy (OpenAI) -> arte (Ideogram/mock) -> composição
-(Playwright) -> aprovação (Flask) -> export PNG.
+Caminho principal (recomendado) — sobe a Central de Controle web, onde o
+Henrique cria campanhas, acompanha a geração, agenda e aprova:
 
-Uso:
+    python main.py --serve
+
+Caminho de terminal (debug) — gera uma campanha pela linha de comando e a
+deixa pronta para aprovação na central:
+
     python main.py --campaign novo
-    python main.py --campaign 2026-05-22_direito-medico --from image
-    python main.py --approve 2026-05-22_direito-medico
-
-Flags --from: briefing | copy | image | compose
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
-from config import settings
-from modules import (
-    approval_server,
-    briefing_parser,
-    composer,
-    copy_generator,
-    image_generator,
-    utils,
-)
+from modules import briefing_parser, campaign_store, pipeline, server
 
 
 # --------------------------------------------------------------------------
-# Briefing interativo no terminal
+# Briefing interativo no terminal (caminho de debug)
 # --------------------------------------------------------------------------
-def _escolha(prompt: str, opcoes: dict[str, str]) -> str:
+def _escolha(prompt: str, opcoes: dict[str, tuple[str, str]]) -> str:
     """Pergunta uma opção numerada e devolve o valor mapeado."""
     print(prompt)
     for k, (rotulo, _v) in opcoes.items():
@@ -95,104 +86,43 @@ def collect_briefing_interactively() -> dict:
     }
 
 
-# --------------------------------------------------------------------------
-# Persistência / carregamento de artefatos da campanha
-# --------------------------------------------------------------------------
-def _salvar_briefing(briefing: dict) -> None:
-    destino = utils.campaign_dir(briefing["campaign_id"]) / "briefing.json"
-    destino.write_text(json.dumps(briefing, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _carregar_briefing(campaign_id: str) -> dict:
-    arq = settings.CAMPAIGNS_DIR / campaign_id / "briefing.json"
-    if not arq.exists():
-        sys.exit(f"❌ briefing.json não encontrado para a campanha {campaign_id}.")
-    return json.loads(arq.read_text(encoding="utf-8"))
-
-
-def _carregar_copy(campaign_id: str) -> list[dict]:
-    arq = settings.CAMPAIGNS_DIR / campaign_id / "copy_v1.json"
-    if not arq.exists():
-        sys.exit(f"❌ copy_v1.json não encontrado para a campanha {campaign_id}.")
-    return json.loads(arq.read_text(encoding="utf-8"))
-
-
-def _image_paths(campaign_id: str, copy_options: list[dict]) -> list:
-    img_dir = settings.CAMPAIGNS_DIR / campaign_id / "images"
-    return [img_dir / f"option_{c['option_id']}.png" for c in copy_options]
-
-
-# --------------------------------------------------------------------------
-# Pipeline
-# --------------------------------------------------------------------------
-def run_pipeline(briefing: dict, from_step: str = "briefing") -> None:
-    """Roda o pipeline a partir da etapa indicada e abre a aprovação."""
-    campaign_id = briefing["campaign_id"]
-    ordem = ["briefing", "copy", "image", "compose"]
-    inicio = ordem.index(from_step)
-
-    # Copy
-    if inicio <= ordem.index("copy"):
-        print("⟳ Gerando variações de copy com OpenAI...")
-        copy_options = copy_generator.generate(briefing)
-    else:
-        copy_options = _carregar_copy(campaign_id)
-
-    # Imagens
-    if inicio <= ordem.index("image"):
-        modo = "placeholder" if settings.USE_MOCK_IMAGES else "Ideogram"
-        print(f"⟳ Gerando artes ({modo})...")
-        image_paths = image_generator.generate(copy_options, briefing["formato"], campaign_id)
-    else:
-        image_paths = _image_paths(campaign_id, copy_options)
-
-    # Composição
-    print("⟳ Compondo posts finais...")
-    composer.compose_all(copy_options, image_paths, briefing)
-
-    # Aprovação
-    print(f"✓ Abrindo interface de aprovação em http://{settings.APPROVAL_HOST}:{settings.APPROVAL_PORT}")
-    approval_server.serve(campaign_id)
-
-
-def run_new_campaign() -> None:
-    """Coleta briefing, valida, salva e roda o pipeline completo."""
+def run_new_campaign_terminal() -> None:
+    """Coleta briefing, valida, cria e gera a campanha (deixa pronta para aprovação)."""
     raw = collect_briefing_interactively()
     briefing = briefing_parser.parse(raw)
-    _salvar_briefing(briefing)
-    print(f"\n✓ Campanha: {briefing['campaign_id']}\n")
-    run_pipeline(briefing, from_step="briefing")
+    campaign_store.criar(briefing)
+    print(f"\n✓ Campanha: {briefing['campaign_id']}")
+    print("⟳ Gerando (copy → arte → composição)...")
+    pipeline.gerar(briefing)
+    print("✓ Geração concluída.")
+    print("  Rode 'python main.py --serve' e abra a central para aprovar.")
 
 
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Pipeline Mendes & Vaz Social")
-    parser.add_argument("--campaign", help='"novo" ou um campaign_id existente')
+    parser = argparse.ArgumentParser(description="Mendes & Vaz Social")
     parser.add_argument(
-        "--from",
-        dest="from_step",
-        choices=["briefing", "copy", "image", "compose"],
-        default="briefing",
-        help="Etapa a partir da qual retomar",
+        "--serve", action="store_true",
+        help="Sobe a Central de Controle web (recomendado)",
     )
-    parser.add_argument("--approve", help="Abre só a aprovação de um campaign_id")
+    parser.add_argument(
+        "--campaign",
+        help='Gera uma campanha pelo terminal: use "novo"',
+    )
     args = parser.parse_args()
 
-    if args.approve:
-        approval_server.serve(args.approve)
+    if args.serve:
+        server.serve()
         return
 
-    if not args.campaign:
-        parser.print_help()
-        sys.exit("\n❌ Informe --campaign novo, --campaign <id> --from <etapa>, ou --approve <id>.")
-
     if args.campaign == "novo":
-        run_new_campaign()
-    else:
-        briefing = _carregar_briefing(args.campaign)
-        run_pipeline(briefing, from_step=args.from_step)
+        run_new_campaign_terminal()
+        return
+
+    parser.print_help()
+    sys.exit('\n❌ Use --serve (central web) ou --campaign novo (terminal).')
 
 
 if __name__ == "__main__":
