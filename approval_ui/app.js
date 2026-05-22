@@ -2,6 +2,7 @@
 // Router por hash + 4 telas: dashboard, nova campanha, progresso, aprovação.
 
 let pollTimer = null;
+let calRef = null; // primeiro dia do mês exibido no calendário
 
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", () => {
@@ -21,6 +22,7 @@ function route() {
   const m = hash.match(/^#\/campanha\/(.+)$/);
   if (hash === "#/" || hash === "") return renderDashboard();
   if (hash === "#/novo") return renderNovo();
+  if (hash === "#/calendario") return renderCalendario();
   if (m) return renderCampanha(decodeURIComponent(m[1]));
   renderDashboard();
 }
@@ -303,6 +305,18 @@ function approvalCard(op, campaignId) {
     body.appendChild(tags);
   }
 
+  // Utilitários: baixar imagem + copiar legenda (custo zero, pra postar manual)
+  const utils = el("div", "card-utils");
+  const dl = el("a", "util-btn");
+  dl.href = op.composed_image_url;
+  dl.download = `${campaignId}_option${op.option_id}.png`;
+  dl.textContent = "⬇ Baixar imagem";
+  utils.appendChild(dl);
+  const copyBtn = textEl("button", "util-btn", "⧉ Copiar legenda");
+  copyBtn.addEventListener("click", () => copyLegenda(op, copyBtn));
+  utils.appendChild(copyBtn);
+  body.appendChild(utils);
+
   const actions = el("div", "card-actions");
   const approveBtn = textEl("button", "btn btn-approve", "✓ Aprovar este post");
   approveBtn.addEventListener("click", () => approve(campaignId, op.option_id));
@@ -368,6 +382,92 @@ function renderAprovada(data) {
       <p>A Opção ${op} foi exportada e está pronta para publicação.</p>
       ${dataAg ? `<p class="done-hint">📅 Agendada para ${formatDate(dataAg)}</p>` : ""}
     </div>`;
+}
+
+// ====================== Calendário ======================
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+async function renderCalendario() {
+  if (!calRef) {
+    const n = new Date();
+    calRef = new Date(n.getFullYear(), n.getMonth(), 1);
+  }
+  app().innerHTML = `<p class="loading">Carregando calendário…</p>`;
+  let campaigns;
+  try {
+    campaigns = await fetchJSON("/api/campaigns");
+  } catch (e) {
+    return showError(`Erro ao carregar o calendário: ${e.message}`);
+  }
+
+  // Mapeia data ISO (YYYY-MM-DD) -> campanhas agendadas naquele dia
+  const porDia = {};
+  campaigns.filter((c) => c.data_agendada).forEach((c) => {
+    (porDia[c.data_agendada] = porDia[c.data_agendada] || []).push(c);
+  });
+
+  const ano = calRef.getFullYear();
+  const mes = calRef.getMonth();
+
+  app().innerHTML = "";
+  const header = el("div", "cal-header");
+  const prev = textEl("button", "cal-nav", "←");
+  prev.addEventListener("click", () => { calRef = new Date(ano, mes - 1, 1); renderCalendario(); });
+  const next = textEl("button", "cal-nav", "→");
+  next.addEventListener("click", () => { calRef = new Date(ano, mes + 1, 1); renderCalendario(); });
+  header.appendChild(prev);
+  header.appendChild(textEl("h1", "cal-title", `${MESES[mes]} ${ano}`));
+  header.appendChild(next);
+  app().appendChild(header);
+
+  const grid = el("div", "cal-grid");
+  DIAS_SEMANA.forEach((d) => grid.appendChild(textEl("div", "cal-weekday", d)));
+
+  const primeiroDiaSemana = new Date(ano, mes, 1).getDay(); // 0=Dom
+  const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+
+  for (let i = 0; i < primeiroDiaSemana; i++) {
+    grid.appendChild(el("div", "cal-cell cal-empty"));
+  }
+  for (let dia = 1; dia <= diasNoMes; dia++) {
+    const cell = el("div", "cal-cell");
+    cell.appendChild(textEl("div", "cal-day-num", String(dia)));
+    const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+    (porDia[iso] || []).forEach((c) => {
+      const b = c.briefing || {};
+      const chip = textEl("a", "cal-chip", b.tema_especifico || b.area_direito || "Campanha");
+      chip.href = `#/campanha/${encodeURIComponent(c.campaign_id)}`;
+      cell.appendChild(chip);
+    });
+    grid.appendChild(cell);
+  }
+  app().appendChild(grid);
+
+  const total = Object.values(porDia).reduce((a, l) => a + l.length, 0);
+  if (!total) {
+    app().appendChild(textEl("p", "cal-vazio",
+      "Nenhuma campanha agendada. Aprove uma campanha com data para vê-la aqui."));
+  }
+}
+
+async function copyLegenda(op, btn) {
+  const tags = (op.hashtags || []).map((h) => `#${h}`).join(" ");
+  const texto = (op.caption || "") + (tags ? `\n\n${tags}` : "");
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch (_) {
+    const ta = document.createElement("textarea");
+    ta.value = texto;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* ignora */ }
+    ta.remove();
+  }
+  const orig = btn.textContent;
+  btn.textContent = "✓ Copiado!";
+  setTimeout(() => { btn.textContent = orig; }, 1500);
 }
 
 // ====================== Helpers ======================
