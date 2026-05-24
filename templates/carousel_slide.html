@@ -2,12 +2,31 @@
 <!-- carousel_slide.html — Slide de carrossel 1080×1080.
      Variante do post quadrado para slides sequenciais: subtítulo como
      "eyebrow" no topo, headline e corpo na base. Mesmas variáveis.
-     Substituição via string.Template ($var). -->
+     Substituição via string.Template ($var).
+     Inclui placeholders de fonte: $font_playfair_700 $font_montserrat_400 $font_montserrat_600 -->
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Montserrat:wght@400;600&display=swap');
+  /* Fontes embarcadas como data URI (offline-safe — ver post_square.html). */
+  @font-face {
+    font-family: 'Playfair Display';
+    font-style: normal;
+    font-weight: 700;
+    src: url('$font_playfair_700') format('woff2');
+  }
+  @font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 400;
+    src: url('$font_montserrat_400') format('woff2');
+  }
+  @font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 600;
+    src: url('$font_montserrat_600') format('woff2');
+  }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 

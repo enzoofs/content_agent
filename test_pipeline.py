@@ -21,10 +21,10 @@ from modules import (
     briefing_parser,
     campaign_store,
     composer,
-    copy_generator,
     exporter,
     image_generator,
     server,
+    store,
 )
 
 
@@ -63,11 +63,14 @@ def test_smoke_pipeline_mocked():
     mock_original = settings.USE_MOCK_IMAGES
     settings.USE_MOCK_IMAGES = True
 
+    # Garante DB inicializado (testes que rodam diretamente, fora da fixture autouse)
+    store.init_db()
+
     try:
-        # Cria campanha (briefing.json + state) e salva copy mockado
+        # Cria campanha no DB e salva copy mockado direto no DB
         campaign_store.criar(briefing)
         copy_options = _mock_copy_options()
-        copy_generator._salvar(campaign_id, copy_options)
+        campaign_store.save_copy_version(campaign_id, 1, copy_options)
 
         # Imagens mock
         image_paths = image_generator.generate(copy_options, "square", campaign_id)
@@ -91,9 +94,10 @@ def test_smoke_pipeline_mocked():
         assert data["state"]["status"] == "aguardando_aprovacao"
 
         # Export
-        png, meta = exporter.export_approved(campaign_id, 2)
-        assert png.exists() and meta.exists()
-        metadata = json.loads(meta.read_text(encoding="utf-8"))
+        export = exporter.export_approved(campaign_id, 2)
+        assert export["png"].exists() and export["metadata"].exists()
+        assert export["post_txt"].exists()  # texto pronto-pra-postar
+        metadata = json.loads(export["metadata"].read_text(encoding="utf-8"))
         assert metadata["option_id"] == 2
         assert metadata["ready_for_posting"] is True
 

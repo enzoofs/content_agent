@@ -27,6 +27,19 @@ APPROVAL_UI_DIR = BASE_DIR / "approval_ui"
 
 LOGO_PATH = ASSETS_DIR / "logo_mendes_vaz.png"
 
+# Fontes embarcadas no template (woff2 subset latin). Embutidas como data URI
+# no @font-face — a renderização NÃO depende de Google Fonts estar acessível.
+FONTS_DIR = ASSETS_DIR / "fonts"
+FONT_FILES = {
+    "montserrat_400": FONTS_DIR / "montserrat-400.woff2",
+    "montserrat_600": FONTS_DIR / "montserrat-600.woff2",
+    "playfair_700": FONTS_DIR / "playfair-display-700.woff2",
+}
+
+# Banco de estado (SQLite). Tudo que era state.json/briefing.json/copy_v*.json
+# agora vive aqui; PNGs continuam em campaigns/{id}/ no FS.
+STATE_DB_PATH = BASE_DIR / "state.db"
+
 # --------------------------------------------------------------------------
 # Dimensões de posts (px) — Fase 1
 # --------------------------------------------------------------------------
@@ -88,20 +101,22 @@ USE_MOCK_IMAGES = (
 IDEOGRAM_CONFIG = {
     "model": "V_2",
     "style_type": "REALISTIC",
+    # Negative prompt: tira clichês jurídicos + ESTÉTICA LUXUOSA (escritório
+    # acessível BR, não palácio) + cenas com muita gente / mãos em close.
     "negative_prompt": (
         "text, words, letters, watermark, logo, signature, "
         "scales of justice, gavel, hammer, cartoon, illustration, "
         "vibrant colors, neon, grunge, ugly, deformed, blurry, "
-        "low quality, amateur"
+        "low quality, amateur, "
+        "luxurious, opulent, marble, gold leaf, palace, mansion, "
+        "expensive interior, chandelier, ornate, "
+        "crowd, group of people, many people, multiple hands, "
+        "close-up of hands, complex interactions, handshake closeup"
     ),
-    "color_palette": {
-        # A API do Ideogram usa a chave "color_hex" (não "color").
-        "members": [
-            {"color_hex": "#272D4D", "color_weight": 0.5},
-            {"color_hex": "#E3B644", "color_weight": 0.25},
-            {"color_hex": "#F5F0E8", "color_weight": 0.25},
-        ]
-    },
+    # color_palette REMOVIDO de propósito: forçava navy+gold em toda imagem,
+    # deixando o feed monocromático (efeito Wes Anderson). A identidade visual
+    # da marca já é garantida pelo overlay+filete+logo+CTA do template — aqui
+    # deixamos a arte respirar com cores naturais (madeira, luz, ambiente real).
 }
 
 # Resolução da Ideogram por formato de post
@@ -111,10 +126,17 @@ IDEOGRAM_RESOLUTIONS = {
     "carousel": "RESOLUTION_1024_1024",
 }
 
-# Sufixo anexado ao image_prompt para reforçar a estética do cliente
+# Sufixo anexado ao image_prompt — estética DELIBERADAMENTE acessível:
+# escritório pequeno/médio brasileiro, classe média, profissional sem ser
+# luxuoso. Texto NUNCA na imagem (vem renderizado por código no template).
+# Não direcionamos paleta aqui — o branding navy/gold vem do template overlay,
+# então a arte pode ter cores naturais (madeira, luz, plantas, ambiente real).
 IMAGE_PROMPT_SUFFIX = (
-    "elegant law firm atmosphere, navy blue and gold tones, professional, "
-    "sophisticated, cinematic lighting, high-end interior, no text"
+    "small to medium-sized law firm, modest professional office, "
+    "Brazilian middle-class environment, accessible, realistic, "
+    "natural lighting, "
+    "1 person (or at most 2), diverse representation, "
+    "professional but simple, not luxurious, no text"
 )
 
 # --------------------------------------------------------------------------

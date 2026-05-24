@@ -7,8 +7,25 @@ let calRef = null; // primeiro dia do mês exibido no calendário
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", () => {
   setupModal();
+  setupTopbar();
   route();
 });
+
+// Spotlight gold seguindo o cursor na topbar — luz oblíqua editorial.
+// Atualiza CSS vars --mx/--my; o radial-gradient no style.css usa.
+function setupTopbar() {
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+  topbar.addEventListener("mousemove", (e) => {
+    const rect = topbar.getBoundingClientRect();
+    topbar.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+    topbar.style.setProperty("--my", `${e.clientY - rect.top}px`);
+  });
+  topbar.addEventListener("mouseleave", () => {
+    topbar.style.setProperty("--mx", "-400px");
+    topbar.style.setProperty("--my", "-400px");
+  });
+}
 
 function app() { return document.getElementById("app"); }
 
@@ -75,6 +92,14 @@ function renderNovo() {
   app().innerHTML = `
     <a class="back" href="#/">← Campanhas</a>
     <h1 class="page-title">Nova campanha</h1>
+    <div class="template-bar">
+      <label class="template-bar-label">Template:
+        <select id="template-select">
+          <option value="">— em branco —</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-adjust" id="btn-template-delete" disabled>Apagar</button>
+    </div>
     <form id="form-novo" class="form">
       <label>Área do direito *
         <input name="area_direito" required placeholder="ex.: Direito Médico">
@@ -117,7 +142,10 @@ function renderNovo() {
         <textarea name="referencias" rows="2"></textarea>
       </label>
       <div id="form-erro" class="form-erro hidden"></div>
-      <button type="submit" class="btn btn-approve" id="btn-gerar">Gerar campanha</button>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-approve" id="btn-gerar">Gerar campanha</button>
+        <button type="button" class="btn btn-adjust" id="btn-template-save">Salvar como template</button>
+      </div>
       <p class="form-hint">A geração leva ~1-2 min e consome créditos de API.</p>
     </form>`;
 
@@ -128,6 +156,94 @@ function renderNovo() {
   });
 
   document.getElementById("form-novo").addEventListener("submit", onSubmitNovo);
+  document.getElementById("template-select").addEventListener("change", onTemplateSelect);
+  document.getElementById("btn-template-save").addEventListener("click", onTemplateSave);
+  document.getElementById("btn-template-delete").addEventListener("click", onTemplateDelete);
+  carregarTemplates();
+}
+
+// ---- Templates de briefing ----
+async function carregarTemplates() {
+  const sel = document.getElementById("template-select");
+  if (!sel) return;
+  try {
+    const lista = await fetchJSON("/api/templates");
+    // Mantém só a opção "em branco" e repopula
+    sel.innerHTML = '<option value="">— em branco —</option>';
+    for (const t of lista) {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.nome;
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    console.error("Falha ao carregar templates:", e);
+  }
+}
+
+function onTemplateSelect(e) {
+  const id = e.target.value;
+  const btnDel = document.getElementById("btn-template-delete");
+  btnDel.disabled = !id;
+  if (!id) return;
+  // Acha o template na lista carregada e popula o form
+  fetchJSON("/api/templates").then(lista => {
+    const t = lista.find(x => String(x.id) === String(id));
+    if (!t) return;
+    const form = document.getElementById("form-novo");
+    for (const campo of ["area_direito", "perfil_cliente_ideal", "tom", "objetivo",
+                          "formato", "num_slides", "tema_especifico", "referencias"]) {
+      if (form.elements[campo] && t[campo] !== undefined && t[campo] !== null) {
+        form.elements[campo].value = t[campo];
+      }
+    }
+    // Mostra/esconde campo de slides conforme formato
+    document.getElementById("wrap-slides").classList.toggle("hidden", t.formato !== "carousel");
+  });
+}
+
+async function onTemplateSave() {
+  const nome = prompt("Nome do template:");
+  if (!nome || !nome.trim()) return;
+  const form = document.getElementById("form-novo");
+  const fd = new FormData(form);
+  const body = Object.fromEntries(fd.entries());
+  body.nome = nome.trim();
+  if (body.formato !== "carousel") body.num_slides = 1;
+  else body.num_slides = parseInt(body.num_slides, 10);
+  try {
+    const res = await fetch("/api/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || "Falha ao salvar template");
+    await carregarTemplates();
+    document.getElementById("template-select").value = data.id;
+    document.getElementById("btn-template-delete").disabled = false;
+  } catch (err) {
+    alert("Erro ao salvar template: " + err.message);
+  }
+}
+
+async function onTemplateDelete() {
+  const sel = document.getElementById("template-select");
+  const id = sel.value;
+  if (!id) return;
+  const nome = sel.options[sel.selectedIndex].textContent;
+  if (!confirm(`Apagar template "${nome}"?`)) return;
+  try {
+    const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.erro || "Falha ao apagar template");
+    }
+    await carregarTemplates();
+    document.getElementById("btn-template-delete").disabled = true;
+  } catch (err) {
+    alert("Erro ao apagar template: " + err.message);
+  }
 }
 
 async function onSubmitNovo(e) {
@@ -274,17 +390,29 @@ function renderAprovacao(data) {
 
 function approvalCard(op, campaignId) {
   const card = el("div", "card");
+  const isCarousel = Array.isArray(op.slides);
 
-  const img = el("img", "card-preview");
-  img.src = op.composed_image_url;
-  img.alt = `Opção ${op.option_id}`;
-  img.addEventListener("click", () => openModal(op.composed_image_url));
-  card.appendChild(img);
+  if (isCarousel) {
+    card.appendChild(carouselPreview(op));
+  } else {
+    const img = el("img", "card-preview");
+    img.src = op.composed_image_url;
+    img.alt = `Opção ${op.option_id}`;
+    img.addEventListener("click", () => openModal(op.composed_image_url));
+    card.appendChild(img);
+  }
 
   const body = el("div", "card-body");
-  body.appendChild(textEl("div", "card-tag", `Opção ${op.option_id}`));
-  body.appendChild(textEl("h3", "card-headline", op.headline));
-  body.appendChild(textEl("p", "card-text", op.body));
+  body.appendChild(textEl("div", "card-tag",
+    isCarousel
+      ? `Opção ${op.option_id} · Carrossel (${op.slides.length} slides)`
+      : `Opção ${op.option_id}`,
+  ));
+
+  if (!isCarousel) {
+    body.appendChild(textEl("h3", "card-headline", op.headline));
+    body.appendChild(textEl("p", "card-text", op.body));
+  }
 
   const capBlock = el("div", "caption-block");
   const capText = textEl("div", "caption-text collapsed", op.caption || "(sem legenda)");
@@ -307,20 +435,33 @@ function approvalCard(op, campaignId) {
 
   // Utilitários: baixar imagem + copiar legenda (custo zero, pra postar manual)
   const utils = el("div", "card-utils");
-  const dl = el("a", "util-btn");
-  dl.href = op.composed_image_url;
-  dl.download = `${campaignId}_option${op.option_id}.png`;
-  dl.textContent = "⬇ Baixar imagem";
-  utils.appendChild(dl);
+  if (isCarousel) {
+    const dlAll = textEl("button", "util-btn", `⬇ Baixar ${op.slides.length} slides`);
+    dlAll.addEventListener("click", () => baixarSlides(op, campaignId));
+    utils.appendChild(dlAll);
+  } else {
+    const dl = el("a", "util-btn");
+    dl.href = op.composed_image_url;
+    dl.download = `${campaignId}_option${op.option_id}.png`;
+    dl.textContent = "⬇ Baixar imagem";
+    utils.appendChild(dl);
+  }
   const copyBtn = textEl("button", "util-btn", "⧉ Copiar legenda");
   copyBtn.addEventListener("click", () => copyLegenda(op, copyBtn));
   utils.appendChild(copyBtn);
   body.appendChild(utils);
 
   const actions = el("div", "card-actions");
-  const approveBtn = textEl("button", "btn btn-approve", "✓ Aprovar este post");
+  const approveBtn = textEl(
+    "button", "btn btn-approve",
+    isCarousel ? "✓ Aprovar este carrossel" : "✓ Aprovar este post",
+  );
   approveBtn.addEventListener("click", () => approve(campaignId, op.option_id));
   actions.appendChild(approveBtn);
+
+  const editBtn = textEl("button", "btn btn-adjust", "✎ Editar copy");
+  editBtn.addEventListener("click", () => openEditModal(campaignId, op, isCarousel));
+  actions.appendChild(editBtn);
 
   const adjustBtn = textEl("button", "btn btn-adjust", "Solicitar ajuste");
   const adjustBox = el("div", "adjust-box hidden");
@@ -337,6 +478,37 @@ function approvalCard(op, campaignId) {
   body.appendChild(actions);
   card.appendChild(body);
   return card;
+}
+
+function carouselPreview(op) {
+  // Stack vertical: cada slide com badge "X/N" e seu headline/body próprios.
+  const wrap = el("div", "slides-stack");
+  const total = op.slides.length;
+  op.slides.forEach((s) => {
+    const slide = el("div", "slide-item");
+    const img = el("img", "slide-img");
+    img.src = s.image_url;
+    img.alt = `Slide ${s.slide_id}`;
+    img.addEventListener("click", () => openModal(s.image_url));
+    slide.appendChild(img);
+    slide.appendChild(textEl("div", "slide-badge", `Slide ${s.slide_id}/${total}`));
+    wrap.appendChild(slide);
+  });
+  return wrap;
+}
+
+async function baixarSlides(op, campaignId) {
+  // Baixa cada slide sequencialmente (anchor clicks) — sem dependência de zip.
+  for (const s of op.slides) {
+    const a = document.createElement("a");
+    a.href = s.image_url;
+    a.download = `${campaignId}_option${op.option_id}_slide${s.slide_id}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Pequena pausa para o navegador não suprimir downloads consecutivos
+    await new Promise((r) => setTimeout(r, 150));
+  }
 }
 
 async function approve(campaignId, optionId) {
@@ -374,6 +546,9 @@ async function adjust(campaignId, optionId, nota) {
 function renderAprovada(data) {
   const op = data.state.option_aprovada;
   const dataAg = data.state.data_agendada;
+  const exp = data.exports || {};
+  const allPngs = exp.all_pngs || (exp.png ? [exp.png] : []);
+
   app().innerHTML = `
     <a class="back" href="#/">← Campanhas</a>
     <div class="done-card">
@@ -381,7 +556,40 @@ function renderAprovada(data) {
       <h2>Post aprovado</h2>
       <p>A Opção ${op} foi exportada e está pronta para publicação.</p>
       ${dataAg ? `<p class="done-hint">📅 Agendada para ${formatDate(dataAg)}</p>` : ""}
+    </div>
+
+    <div class="export-paths">
+      <h3 class="export-paths-title">Arquivos exportados</h3>
+      <div class="export-list" id="export-list"></div>
     </div>`;
+
+  const list = document.getElementById("export-list");
+  if (exp.post_txt) list.appendChild(exportRow("Texto pra postar (post.txt)", exp.post_txt));
+  if (exp.metadata) list.appendChild(exportRow("Metadata (JSON)", exp.metadata));
+  allPngs.forEach((p, i) => {
+    const label = allPngs.length > 1 ? `Imagem — slide ${i + 1}` : "Imagem (PNG)";
+    list.appendChild(exportRow(label, p));
+  });
+}
+
+function exportRow(label, path) {
+  const row = el("div", "export-row");
+  row.appendChild(textEl("div", "export-row-label", label));
+  const pathEl = textEl("code", "export-row-path", path);
+  row.appendChild(pathEl);
+  const btn = textEl("button", "util-btn export-row-copy", "Copiar caminho");
+  btn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(path);
+      const old = btn.textContent;
+      btn.textContent = "✓ Copiado!";
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    } catch (_) {
+      alert("Não consegui copiar — selecione e copie manual.");
+    }
+  });
+  row.appendChild(btn);
+  return row;
 }
 
 // ====================== Calendário ======================
@@ -501,6 +709,123 @@ function setupModal() {
   const modal = document.getElementById("modal");
   document.getElementById("modal-close").addEventListener("click", closeModal);
   modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+  // Modal de edição manual de copy
+  const edit = document.getElementById("edit-modal");
+  document.getElementById("edit-modal-close").addEventListener("click", closeEditModal);
+  document.getElementById("edit-cancel").addEventListener("click", closeEditModal);
+  edit.addEventListener("click", (e) => { if (e.target === edit) closeEditModal(); });
+  document.getElementById("edit-save").addEventListener("click", saveEdit);
+}
+
+// --- Edição manual de copy ---
+let editContext = null; // { campaignId, optionId, isCarousel }
+
+function openEditModal(campaignId, op, isCarousel) {
+  editContext = { campaignId, optionId: op.option_id, isCarousel };
+  const form = document.getElementById("edit-form");
+  form.innerHTML = "";
+
+  if (isCarousel) {
+    // Metadados da publicação (1 conjunto pra todo o carrossel)
+    form.appendChild(fieldGroup("Caption", "caption", op.caption || "", "textarea", 2200));
+    form.appendChild(fieldGroup("CTA", "cta", op.cta || "", "input", 40));
+    form.appendChild(fieldGroup(
+      "Hashtags (separadas por vírgula ou espaço)", "hashtags",
+      (op.hashtags || []).join(", "), "input",
+    ));
+    // Cada slide tem seu próprio bloco
+    op.slides.forEach((s) => {
+      const block = el("fieldset", "edit-slide-block");
+      block.appendChild(textEl("legend", "edit-slide-legend", `Slide ${s.slide_id}/${op.slides.length}`));
+      block.appendChild(fieldGroup("Headline", `slide-${s.slide_id}-headline`, s.headline || "", "input", 60));
+      block.appendChild(fieldGroup("Subheadline", `slide-${s.slide_id}-subheadline`, s.subheadline || "", "input", 80));
+      block.appendChild(fieldGroup("Body", `slide-${s.slide_id}-body`, s.body || "", "textarea", 150));
+      form.appendChild(block);
+    });
+  } else {
+    form.appendChild(fieldGroup("Headline", "headline", op.headline || "", "input", 60));
+    form.appendChild(fieldGroup("Subheadline", "subheadline", op.subheadline || "", "input", 80));
+    form.appendChild(fieldGroup("Body", "body", op.body || "", "textarea", 150));
+    form.appendChild(fieldGroup("Caption", "caption", op.caption || "", "textarea", 2200));
+    form.appendChild(fieldGroup("CTA", "cta", op.cta || "", "input", 40));
+    form.appendChild(fieldGroup(
+      "Hashtags (separadas por vírgula ou espaço)", "hashtags",
+      (op.hashtags || []).join(", "), "input",
+    ));
+  }
+
+  document.getElementById("edit-modal-title").textContent =
+    `Editar copy — Opção ${op.option_id}`;
+  document.getElementById("edit-modal").classList.remove("hidden");
+}
+
+function fieldGroup(label, name, value, kind, maxlen) {
+  const wrap = el("label", "edit-field");
+  wrap.appendChild(textEl("span", "edit-field-label", label));
+  const input = el(kind === "textarea" ? "textarea" : "input", "edit-field-input");
+  input.name = name;
+  if (kind === "input") input.type = "text";
+  else input.rows = kind === "textarea" && name === "caption" ? 5 : 2;
+  input.value = value;
+  if (maxlen) input.maxLength = maxlen;
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function closeEditModal() {
+  document.getElementById("edit-modal").classList.add("hidden");
+  editContext = null;
+}
+
+async function saveEdit() {
+  if (!editContext) return;
+  const { campaignId, optionId, isCarousel } = editContext;
+  const form = document.getElementById("edit-form");
+  const data = new FormData(form);
+
+  const fields = {};
+  const slidesMap = {};
+
+  for (const [name, raw] of data.entries()) {
+    const value = String(raw);
+    const slideMatch = name.match(/^slide-(\d+)-(headline|subheadline|body)$/);
+    if (slideMatch) {
+      const sid = parseInt(slideMatch[1], 10);
+      slidesMap[sid] = slidesMap[sid] || { slide_id: sid };
+      slidesMap[sid][slideMatch[2]] = value;
+    } else if (name === "hashtags") {
+      fields.hashtags = value.split(/[,\s]+/).filter(Boolean);
+    } else {
+      fields[name] = value;
+    }
+  }
+
+  if (isCarousel && Object.keys(slidesMap).length) {
+    fields.slides = Object.values(slidesMap);
+  }
+
+  const saveBtn = document.getElementById("edit-save");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Salvando…";
+
+  try {
+    const res = await fetch(`/api/campaigns/${encodeURIComponent(campaignId)}/edit-copy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ option_id: optionId, fields }),
+    });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.erro || "Falha ao salvar edição");
+    closeEditModal();
+    renderCampanha(campaignId); // recarrega card (preview do PNG recomposto)
+  } catch (err) {
+    alert("Erro ao salvar: " + err.message);
+  } finally {
+    // Sempre reseta o botão — sem isso ele fica "Salvando…" eternamente após sucesso
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Salvar e recompor";
+  }
 }
 function openModal(src) {
   document.getElementById("modal-img").src = src;

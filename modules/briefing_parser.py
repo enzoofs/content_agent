@@ -32,6 +32,15 @@ TONS_VALIDOS = {"tecnico", "acessivel"}
 OBJETIVOS_VALIDOS = {"awareness", "captacao", "posicionamento"}
 FORMATOS_VALIDOS = {"square", "portrait", "carousel"}
 
+# Limite de caracteres por campo livre — evita custo/erro com texto gigante no
+# prompt da OpenAI e protege a UI de payloads absurdos.
+MAX_CHARS = {
+    "area_direito": 200,
+    "perfil_cliente_ideal": 500,
+    "tema_especifico": 500,
+    "referencias": 2000,
+}
+
 
 def parse(briefing_raw: dict) -> dict:
     """
@@ -64,6 +73,15 @@ def parse(briefing_raw: dict) -> dict:
         raise ValueError(
             "Campo 'perfil_cliente_ideal' é obrigatório e não pode ser vazio."
         )
+
+    # --- Cap de caracteres por campo livre (custo/erro de prompt gigante) ---
+    for campo, limite in MAX_CHARS.items():
+        valor = b.get(campo) or ""
+        if isinstance(valor, str) and len(valor) > limite:
+            raise ValueError(
+                f"Campo '{campo}' excede o limite de {limite} caracteres "
+                f"(recebido: {len(valor)})."
+            )
 
     # --- Enums ---
     if b.get("tom") not in TONS_VALIDOS:

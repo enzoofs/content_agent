@@ -17,7 +17,80 @@ from __future__ import annotations
 import argparse
 import sys
 
-from modules import briefing_parser, campaign_store, pipeline, server
+from config import settings
+from modules import briefing_parser, campaign_store, pipeline, server, store
+
+
+# --------------------------------------------------------------------------
+# Health-check de credenciais (evita campanha quebrar dentro da thread)
+# --------------------------------------------------------------------------
+def _check_credenciais() -> None:
+    """
+    Valida as chaves de API antes de subir a central.
+
+    - OPENAI_API_KEY ausente: fatal — geração de copy não funciona, encerra.
+    - IDEOGRAM_API_KEY ausente: aviso — segue, mas arte sai em placeholder.
+    """
+    if not settings.OPENAI_API_KEY:
+        sys.exit(
+            "❌ OPENAI_API_KEY não configurada.\n"
+            "   Defina a chave no arquivo .env antes de subir a central.\n"
+            "   Sem ela a geração de copy não funciona."
+        )
+
+    if settings.USE_MOCK_IMAGES:
+        # USE_MOCK_IMAGES vira True automaticamente quando IDEOGRAM_API_KEY
+        # falta (ver config/settings.py). Avisa, mas não bloqueia.
+        print(
+            "⚠️  IDEOGRAM_API_KEY não configurada (ou USE_MOCK_IMAGES=true).\n"
+            "    Arte sairá como placeholder navy/gold local (sem chamada à Ideogram)."
+        )
+
+    print("✓ Credenciais OK (OpenAI conectada).")
+
+
+def _setup_db() -> None:
+    """
+    Garante que o DB existe e migra campanhas antigas (state.json + copy_v*.json)
+    do filesystem. Idempotente — campanhas já presentes no DB são ignoradas.
+    """
+    store.init_db()
+    stats = store.migrate_from_files()
+    if stats["campaigns_inseridas"]:
+        print(
+            f"↻ Migração: {stats['campaigns_inseridas']} campanhas + "
+            f"{stats['copy_versions_inseridas']} versões de copy importadas do FS."
+        )
+    print(f"✓ Banco de estado em {settings.STATE_DB_PATH.name} pronto.")
+
+
+def _check_chromium() -> None:
+    """
+    Garante que o Chromium do Playwright está instalado e abre.
+
+    Sem isso, a composição quebra dentro da thread de geração e o usuário
+    fica vendo "Gerando..." sem entender o motivo. Falha aqui é fatal — a
+    central inteira depende do composer.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        sys.exit(
+            "❌ Playwright não está instalado.\n"
+            "   Rode: pip install -r requirements.txt"
+        )
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            browser.close()
+    except Exception as e:
+        sys.exit(
+            f"❌ Chromium do Playwright indisponível: {e}\n"
+            "   Rode: playwright install chromium"
+        )
+
+    print("✓ Chromium (Playwright) pronto.")
 
 
 # --------------------------------------------------------------------------
@@ -114,10 +187,16 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.serve:
+        _check_credenciais()
+        _check_chromium()
+        _setup_db()
         server.serve()
         return
 
     if args.campaign == "novo":
+        _check_credenciais()
+        _check_chromium()
+        _setup_db()
         run_new_campaign_terminal()
         return
 

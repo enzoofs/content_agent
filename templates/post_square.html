@@ -3,12 +3,32 @@
      Substituição via string.Template (placeholders $var). CSS fica literal.
      Variáveis: $width $height $gold $navy $navy_dark
                 $background_image $logo $headline $subheadline_html
-                $body_text $cta_text -->
+                $body_text $cta_text
+                $font_playfair_700 $font_montserrat_400 $font_montserrat_600 -->
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Montserrat:wght@400;600&display=swap');
+  /* Fontes embarcadas como data URI — composer.py injeta os blobs.
+     Zero dependência de Google Fonts: a demo funciona offline. */
+  @font-face {
+    font-family: 'Playfair Display';
+    font-style: normal;
+    font-weight: 700;
+    src: url('$font_playfair_700') format('woff2');
+  }
+  @font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 400;
+    src: url('$font_montserrat_400') format('woff2');
+  }
+  @font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 600;
+    src: url('$font_montserrat_600') format('woff2');
+  }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 

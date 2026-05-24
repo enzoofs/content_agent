@@ -34,6 +34,22 @@
     <img id="modal-img" src="" alt="Preview ampliado">
   </div>
 
+  <!-- Modal de edição manual de copy -->
+  <div id="edit-modal" class="edit-modal hidden">
+    <div class="edit-modal-box">
+      <div class="edit-modal-header">
+        <h2 id="edit-modal-title">Editar copy</h2>
+        <button class="edit-modal-close" id="edit-modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="edit-form" class="edit-form"></form>
+      <div class="edit-modal-actions">
+        <button class="btn btn-adjust" id="edit-cancel">Cancelar</button>
+        <button class="btn btn-approve" id="edit-save">Salvar e recompor</button>
+      </div>
+      <p class="edit-modal-hint">Sobrescreve a versão atual de copy. Não chama a OpenAI (custo zero).</p>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

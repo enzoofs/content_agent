@@ -8,6 +8,10 @@ requests>=2.31.0
 # Servidor local da interface de aprovação
 flask>=3.0.0
 
+# WSGI de produção (cross-platform: Windows + Linux) — substitui o werkzeug
+# make_server, que o próprio werkzeug avisa "not for production use".
+waitress>=3.0.0
+
 # Composição final: renderiza HTML/CSS -> PNG
 playwright>=1.44.0
 

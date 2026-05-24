@@ -41,7 +41,7 @@ def test_gerar_passa_pelas_etapas_e_termina_aguardando(monkeypatch):
         campaign_store, "set_etapa",
         lambda cid, etapa: etapas_vistas.append(etapa),
     )
-    monkeypatch.setattr(pipeline.copy_generator, "generate", lambda b, nota="": [{"option_id": 1}])
+    monkeypatch.setattr(pipeline.copy_generator, "generate", lambda b, nota="", versao=1: [{"option_id": 1}])
     monkeypatch.setattr(pipeline.image_generator, "generate", lambda ops, fmt, cid: ["img"])
     monkeypatch.setattr(
         pipeline.composer, "compose_all",
@@ -58,7 +58,7 @@ def test_gerar_passa_pelas_etapas_e_termina_aguardando(monkeypatch):
 
 
 def test_gerar_falha_marca_erro_e_relanca(monkeypatch):
-    def boom(b, nota=""):
+    def boom(b, nota="", versao=1):
         raise RuntimeError("falha na copy")
     monkeypatch.setattr(pipeline.copy_generator, "generate", boom)
 
@@ -70,3 +70,32 @@ def test_gerar_falha_marca_erro_e_relanca(monkeypatch):
     estado = campaign_store.read_state(CID)
     assert estado["status"] == "erro"
     assert "falha na copy" in estado["erro"]
+
+
+# --------------------------------------------------------------------------
+# Versionamento de copy (Fix C do roadmap) — regerar não sobrescreve
+# --------------------------------------------------------------------------
+def test_regerar_bumpa_versao_e_preserva_copy_anterior(monkeypatch):
+    """regerar() incrementa copy_version e a versão antiga continua no disco."""
+    versoes_recebidas: list[int] = []
+
+    def fake_generate(briefing, nota="", versao=1):
+        versoes_recebidas.append(versao)
+        return [{"option_id": 1, "nota": nota, "versao": versao}]
+
+    monkeypatch.setattr(pipeline.copy_generator, "generate", fake_generate)
+    monkeypatch.setattr(pipeline.image_generator, "generate", lambda ops, fmt, cid: ["img"])
+    monkeypatch.setattr(pipeline.composer, "compose_all", lambda ops, imgs, b: [])
+
+    briefing = _briefing()
+    campaign_store.criar(briefing)
+
+    # 1ª geração — versão 1
+    pipeline.gerar(briefing)
+    assert campaign_store.get_copy_version(CID) == 1
+    assert versoes_recebidas == [1]
+
+    # Regerar — deve ir pra versão 2
+    pipeline.regerar(CID, nota="mais técnico")
+    assert campaign_store.get_copy_version(CID) == 2
+    assert versoes_recebidas == [1, 2]

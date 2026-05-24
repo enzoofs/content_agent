@@ -46,7 +46,7 @@ def _briefing_body():
 
 
 def _seed_copy_e_composed():
-    """Cria copy_v1.json + 3 PNGs compostos falsos para a campanha CID."""
+    """Salva 3 opções de copy no DB + cria 3 PNGs compostos falsos para a campanha CID."""
     camp = settings.CAMPAIGNS_DIR / CID
     (camp / "composed").mkdir(parents=True, exist_ok=True)
     ops = [{
@@ -54,7 +54,7 @@ def _seed_copy_e_composed():
         "caption": "c", "cta": "x", "hashtags": ["direito"],
         "image_prompt": "p", "style_notes": "n",
     } for i in (1, 2, 3)]
-    (camp / "copy_v1.json").write_text(json.dumps(ops, ensure_ascii=False), encoding="utf-8")
+    campaign_store.save_copy_version(CID, 1, ops)
     for i in (1, 2, 3):
         (camp / "composed" / f"option_{i}.png").write_bytes(b"PNG")
 
@@ -87,7 +87,10 @@ def test_get_campanha_traz_options(client):
     data = client.get(f"/api/campaigns/{CID}").get_json()
     assert data["state"]["status"] == "aguardando_aprovacao"
     assert len(data["options"]) == 3
-    assert data["options"][0]["composed_image_url"] == f"/composed/{CID}/option_1.png"
+    # URL agora inclui ?v=<mtime> pra cache-busting; checa só o prefixo
+    assert data["options"][0]["composed_image_url"].startswith(
+        f"/composed/{CID}/option_1.png?v="
+    )
 
 
 def test_approve_exporta_e_marca(client, monkeypatch):
@@ -96,7 +99,12 @@ def test_approve_exporta_e_marca(client, monkeypatch):
     campaign_store.marcar_aguardando(CID)
     monkeypatch.setattr(
         server.exporter, "export_approved",
-        lambda cid, oid: (Path("fake.png"), Path("fake.json")),
+        lambda cid, oid: {
+            "png": Path("fake.png"),
+            "metadata": Path("fake.json"),
+            "post_txt": Path("fake.txt"),
+            "all_pngs": [Path("fake.png")],
+        },
     )
     resp = client.post(f"/api/campaigns/{CID}/approve",
                        json={"option_id": 2, "data_agendada": "2099-12-31"})
@@ -111,8 +119,13 @@ def test_approve_data_passada_400(client, monkeypatch):
     client.post("/api/campaigns", json=_briefing_body())
     _seed_copy_e_composed()
     campaign_store.marcar_aguardando(CID)
-    monkeypatch.setattr(server.exporter, "export_approved",
-                        lambda cid, oid: (Path("fake.png"), Path("fake.json")))
+    monkeypatch.setattr(
+        server.exporter, "export_approved",
+        lambda cid, oid: {
+            "png": Path("fake.png"), "metadata": Path("fake.json"),
+            "post_txt": Path("fake.txt"), "all_pngs": [Path("fake.png")],
+        },
+    )
     resp = client.post(f"/api/campaigns/{CID}/approve",
                        json={"option_id": 1, "data_agendada": "2000-01-01"})
     assert resp.status_code == 400
@@ -124,3 +137,144 @@ def test_adjust_inicia_regeracao(client):
                        json={"option_id": 1, "nota": "mais técnico"})
     assert resp.status_code == 200
     assert resp.get_json()["status"] == "regerando"
+
+
+# --------------------------------------------------------------------------
+# Carrossel — payload aninhado com slides[]
+# --------------------------------------------------------------------------
+def _briefing_body_carousel(n_slides=3):
+    body = _briefing_body()
+    body["formato"] = "carousel"
+    body["num_slides"] = n_slides
+    return body
+
+
+def _seed_carousel_copy_e_composed(n_slides=3):
+    """Salva copy carrossel no DB + PNGs por slide (3 opções × N slides)."""
+    camp = settings.CAMPAIGNS_DIR / CID
+    (camp / "composed").mkdir(parents=True, exist_ok=True)
+    ops = []
+    for i in (1, 2, 3):
+        ops.append({
+            "option_id": i,
+            "caption": f"caption {i}",
+            "cta": "Saiba mais",
+            "hashtags": ["direitomedico"],
+            "style_notes": "n",
+            "slides": [
+                {"slide_id": j, "headline": f"h{i}_{j}", "subheadline": "",
+                 "body": f"b{i}_{j}", "image_prompt": "p"}
+                for j in range(1, n_slides + 1)
+            ],
+        })
+        for j in range(1, n_slides + 1):
+            (camp / "composed" / f"option_{i}_slide_{j}.png").write_bytes(b"PNG")
+    campaign_store.save_copy_version(CID, 1, ops)
+
+
+def test_get_campanha_carousel_traz_slides(client):
+    client.post("/api/campaigns", json=_briefing_body_carousel(n_slides=4))
+    _seed_carousel_copy_e_composed(n_slides=4)
+    campaign_store.marcar_aguardando(CID)
+
+    data = client.get(f"/api/campaigns/{CID}").get_json()
+    assert data["briefing"]["formato"] == "carousel"
+    assert len(data["options"]) == 3
+
+    op1 = data["options"][0]
+    # Carrossel: caption/cta/hashtags no nível da opção, sem composed_image_url
+    assert "composed_image_url" not in op1
+    assert op1["caption"] == "caption 1"
+    assert "slides" in op1 and len(op1["slides"]) == 4
+    primeiro = op1["slides"][0]
+    assert primeiro["slide_id"] == 1
+    assert primeiro["image_url"].startswith(f"/composed/{CID}/option_1_slide_1.png?v=")
+
+
+# --------------------------------------------------------------------------
+# Edição manual de copy (sem chamar OpenAI)
+# --------------------------------------------------------------------------
+def test_edit_copy_simples_atualiza_e_recompoe(client, monkeypatch):
+    """Edição num post simples: sobrescreve campos e dispara recompose_option."""
+    client.post("/api/campaigns", json=_briefing_body())
+    _seed_copy_e_composed()
+    campaign_store.marcar_aguardando(CID)
+
+    recomposed: list = []
+    monkeypatch.setattr(
+        server.composer, "recompose_option",
+        lambda briefing, opcao: recomposed.append(opcao) or [Path("fake.png")],
+    )
+
+    resp = client.post(
+        f"/api/campaigns/{CID}/edit-copy",
+        json={
+            "option_id": 2,
+            "fields": {
+                "headline": "Headline NOVO",
+                "body": "Corpo NOVO",
+                "hashtags": ["#Direito Médico", "advocaciabh"],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+
+    # Payload retornado já reflete a edição
+    op2 = next(o for o in data["options"] if o["option_id"] == 2)
+    assert op2["headline"] == "Headline NOVO"
+    assert op2["body"] == "Corpo NOVO"
+    assert op2["hashtags"] == ["direitomedico", "advocaciabh"]  # normalizadas
+
+    # Versão de copy NÃO foi bumpada (edição não é regeração)
+    assert campaign_store.get_copy_version(CID) == 1
+
+    # composer.recompose_option foi chamado com a opção 2 atualizada
+    assert len(recomposed) == 1
+    assert recomposed[0]["option_id"] == 2
+    assert recomposed[0]["headline"] == "Headline NOVO"
+
+
+def test_edit_copy_carrossel_edita_metadado_e_slides(client, monkeypatch):
+    """Carrossel: edita caption (opção) + headline de um slide específico."""
+    client.post("/api/campaigns", json=_briefing_body_carousel(n_slides=3))
+    _seed_carousel_copy_e_composed(n_slides=3)
+    campaign_store.marcar_aguardando(CID)
+
+    monkeypatch.setattr(server.composer, "recompose_option",
+                        lambda b, o: [Path("fake.png")])
+
+    resp = client.post(
+        f"/api/campaigns/{CID}/edit-copy",
+        json={
+            "option_id": 1,
+            "fields": {
+                "caption": "Caption editada",
+                "slides": [
+                    {"slide_id": 2, "headline": "H2 NOVO"},
+                ],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    op1 = next(o for o in data["options"] if o["option_id"] == 1)
+    assert op1["caption"] == "Caption editada"
+    slide2 = next(s for s in op1["slides"] if s["slide_id"] == 2)
+    assert slide2["headline"] == "H2 NOVO"
+    # Slides não tocados ficam iguais
+    slide1 = next(s for s in op1["slides"] if s["slide_id"] == 1)
+    assert slide1["headline"] == "h1_1"
+
+
+def test_edit_copy_rejeita_campo_desconhecido(client):
+    client.post("/api/campaigns", json=_briefing_body())
+    _seed_copy_e_composed()
+    campaign_store.marcar_aguardando(CID)
+
+    resp = client.post(
+        f"/api/campaigns/{CID}/edit-copy",
+        json={"option_id": 1, "fields": {"image_prompt": "hack"}},
+    )
+    assert resp.status_code == 400
+    assert "image_prompt" in resp.get_json()["erro"]

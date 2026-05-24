@@ -23,7 +23,9 @@ from config import settings
 from modules import utils
 
 
-def generate(copy_options: list[dict], formato: str, campaign_id: str) -> list[Path]:
+def generate(
+    copy_options: list[dict], formato: str, campaign_id: str
+) -> list[Path] | list[list[Path]]:
     """
     Gera as imagens de fundo das variações de copy.
 
@@ -33,26 +35,62 @@ def generate(copy_options: list[dict], formato: str, campaign_id: str) -> list[P
         campaign_id: id da campanha (define a pasta de saída).
 
     Returns:
-        Lista de paths PNG em campaigns/{campaign_id}/images/option_{n}.png.
+        - square/portrait: list[Path] (uma imagem por opção)
+        - carousel: list[list[Path]] (lista de slides por opção, na ordem)
+
+    Paths salvos em campaigns/{campaign_id}/images/:
+        - simples: option_{n}.png
+        - carrossel: option_{n}_slide_{m}.png
     """
     out_dir = utils.campaign_images_dir(campaign_id)
     size = settings.POST_SIZES[formato]
-    paths: list[Path] = []
 
+    if formato == "carousel":
+        return _generate_carousel(copy_options, formato, size, out_dir, campaign_id)
+
+    paths: list[Path] = []
     for copy in copy_options:
         n = copy["option_id"]
         destino = out_dir / f"option_{n}.png"
         prompt = _build_prompt(copy["image_prompt"])
-
-        if settings.USE_MOCK_IMAGES:
-            utils.log(campaign_id, f"image_generator: opção {n} usando placeholder (mock).")
-            _generate_mock_image(prompt, destino, size, seed=n)
-        else:
-            _generate_with_fallback(prompt, destino, size, formato, campaign_id, n)
-
+        _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n)
         paths.append(destino)
-
     return paths
+
+
+def _generate_carousel(
+    copy_options: list[dict],
+    formato: str,
+    size: tuple[int, int],
+    out_dir: Path,
+    campaign_id: str,
+) -> list[list[Path]]:
+    """Gera N imagens por opção (uma por slide) e devolve a estrutura aninhada."""
+    todas: list[list[Path]] = []
+    for copy in copy_options:
+        n = copy["option_id"]
+        slides_paths: list[Path] = []
+        for slide in copy["slides"]:
+            m = slide["slide_id"]
+            destino = out_dir / f"option_{n}_slide_{m}.png"
+            prompt = _build_prompt(slide["image_prompt"])
+            # seed combina opção e slide para variar o brilho do placeholder
+            _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n * 10 + m)
+            slides_paths.append(destino)
+        todas.append(slides_paths)
+    return todas
+
+
+def _generate_one(
+    prompt: str, destino: Path, size: tuple[int, int],
+    formato: str, campaign_id: str, n: int, seed: int,
+) -> None:
+    """Gera UMA imagem (mock ou Ideogram com fallback)."""
+    if settings.USE_MOCK_IMAGES:
+        utils.log(campaign_id, f"image_generator: {destino.name} usando placeholder (mock).")
+        _generate_mock_image(prompt, destino, size, seed=seed)
+    else:
+        _generate_with_fallback(prompt, destino, size, formato, campaign_id, n)
 
 
 def _build_prompt(image_prompt: str) -> str:
@@ -89,6 +127,8 @@ def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
     Raises:
         Exception: em qualquer falha de rede, auth ou resposta inesperada.
     """
+    # color_palette omitido de propósito (ver comentário em settings.IDEOGRAM_CONFIG):
+    # o branding navy/gold vem do template; a arte tem liberdade de cor.
     payload = {
         "image_request": {
             "prompt": prompt,
@@ -96,9 +136,10 @@ def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
             "resolution": settings.IDEOGRAM_RESOLUTIONS[formato],
             "style_type": settings.IDEOGRAM_CONFIG["style_type"],
             "negative_prompt": settings.IDEOGRAM_CONFIG["negative_prompt"],
-            "color_palette": settings.IDEOGRAM_CONFIG["color_palette"],
         }
     }
+    if "color_palette" in settings.IDEOGRAM_CONFIG:
+        payload["image_request"]["color_palette"] = settings.IDEOGRAM_CONFIG["color_palette"]
     headers = {
         "Api-Key": settings.IDEOGRAM_API_KEY,
         "Content-Type": "application/json",

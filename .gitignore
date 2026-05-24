@@ -1,6 +1,15 @@
 # Variáveis de ambiente — NUNCA commitar
 .env
 
+# Claude Code / MCP — contém chaves de API, NUNCA commitar
+.mcp.json
+
+# Banco de estado SQLite (gerado em runtime, contém dados das campanhas)
+state.db
+state.db-journal
+state.db-wal
+state.db-shm
+
 # Documentos internos / confidenciais — não versionar
 *.pdf
 timelabs_spec_claudecode.md
@@ -19,8 +28,12 @@ campaigns/*/
 exports/*/
 exports/*.png
 exports/*.json
+exports/audit.jsonl
 !campaigns/.gitkeep
 !exports/.gitkeep
+
+# LibreOffice / acidentes (ex: alguém abriu .env no LibreOffice)
+*.odt
 
 # Playwright
 .playwright/
@@ -31,3 +44,7 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Backups locais (snapshots manuais de state.db + campaigns + exports)
+.backup_demo_*/
+.backup_*/

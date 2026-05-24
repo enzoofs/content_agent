@@ -1,75 +1,92 @@
 """
-modules/campaign_store.py — Fonte da verdade do estado das campanhas.
+modules/campaign_store.py — API de domínio sobre o estado das campanhas.
 
-Único módulo que lê/escreve `campaigns/{id}/state.json`. Os demais módulos
-(server, pipeline) passam por aqui para mudar estado, evitando escrita
-descoordenada do arquivo.
+Antes: única fonte da verdade era `campaigns/{id}/state.json`. Agora delega o
+armazenamento para `modules.store` (SQLite). A API pública é a MESMA — os
+demais módulos (pipeline, server, exporter, image_generator) seguem inalterados.
 
 Estados possíveis (status):
     gerando | aguardando_aprovacao | aprovada | ajuste_solicitado | erro
 
 Durante "gerando", o campo `etapa` indica o progresso fino:
     copy | arte | composicao
+
+Histórico de copy: a cada regerar() o pipeline chama next_copy_version(),
+preservando as versões anteriores em copy_versions (tabela do DB).
 """
 
 from __future__ import annotations
 
-import json
-from datetime import date, datetime
-from pathlib import Path
+from datetime import date
 
-from config import settings
-from modules import utils
+from modules import store, utils
 
 STATES = {"gerando", "aguardando_aprovacao", "aprovada", "ajuste_solicitado", "erro"}
 ETAPAS = {"copy", "arte", "composicao"}
 
 
-def state_path(campaign_id: str) -> Path:
-    """Caminho do state.json da campanha."""
+# --------------------------------------------------------------------------
+# Helpers de path (mantidos para compatibilidade com chamadas legadas/tests)
+# --------------------------------------------------------------------------
+def state_path(campaign_id: str):
+    """DEPRECATED — mantido só para testes legados. SQLite não usa arquivo de estado."""
+    from config import settings
     return settings.CAMPAIGNS_DIR / campaign_id / "state.json"
 
 
+def copy_path(campaign_id: str, versao: int):
+    """DEPRECATED — copy agora vive em copy_versions (DB). Mantido p/ testes legados."""
+    from config import settings
+    return settings.CAMPAIGNS_DIR / campaign_id / f"copy_v{versao}.json"
+
+
+# --------------------------------------------------------------------------
+# Leitura/escrita de estado (interface antiga preservada)
+# --------------------------------------------------------------------------
 def read_state(campaign_id: str) -> dict | None:
     """Lê o estado da campanha; None se não existir."""
-    p = state_path(campaign_id)
-    if not p.exists():
-        return None
-    return json.loads(p.read_text(encoding="utf-8"))
+    return store.get_campaign(campaign_id)
 
 
 def write_state(campaign_id: str, **campos) -> dict:
     """
-    Faz merge dos campos no state.json (criando se preciso) e atualiza o
-    timestamp `atualizado_em`. Retorna o estado resultante.
+    Faz merge dos campos no estado da campanha. Cria automaticamente o registro
+    mínimo se ainda não existir (compat com fluxo legado em que write_state era
+    chamado antes do criar() em alguns testes).
+
+    Retorna o estado resultante. Thread-safe via SQLite WAL.
     """
-    p = state_path(campaign_id)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    estado = read_state(campaign_id) or {"campaign_id": campaign_id}
-    estado.update(campos)
-    estado["atualizado_em"] = datetime.now().isoformat(timespec="seconds")
-    p.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
-    return estado
+    existente = store.get_campaign(campaign_id)
+    if existente is None:
+        # Cria registro mínimo (campos obrigatórios com placeholders) — depois faz update
+        from datetime import datetime
+        from config import settings  # noqa: F401 — só para reforçar dependência ordem-de-import
+        agora = datetime.now().isoformat(timespec="seconds")
+        store.insert_campaign(
+            {
+                "campaign_id": campaign_id,
+                "area_direito": "(desconhecido)",
+                "perfil_cliente_ideal": "(desconhecido)",
+                "tom": "tecnico",
+                "objetivo": "posicionamento",
+                "tema_especifico": "",
+                "formato": "square",
+                "num_slides": 1,
+                "referencias": "",
+                "created_at": agora,
+            },
+            status=campos.get("status", "gerando"),
+            etapa=campos.get("etapa", "copy"),
+        )
+    return store.update_campaign(campaign_id, **campos)
 
 
 def criar(briefing: dict) -> dict:
     """
-    Cria a campanha: salva briefing.json e inicia o state como
-    (status=gerando, etapa=copy). Retorna o estado.
+    Cria a campanha no DB com (status=gerando, etapa=copy, copy_version=1).
     """
-    cid = briefing["campaign_id"]
-    camp = utils.campaign_dir(cid)
-    (camp / "briefing.json").write_text(
-        json.dumps(briefing, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    return write_state(
-        cid,
-        status="gerando",
-        etapa="copy",
-        data_agendada=None,
-        option_aprovada=None,
-        erro=None,
-    )
+    store.init_schema()  # garante schema na 1ª chamada (testes/fluxos isolados)
+    return store.insert_campaign(briefing, status="gerando", etapa="copy")
 
 
 def set_etapa(campaign_id: str, etapa: str) -> None:
@@ -115,21 +132,81 @@ def agendar(campaign_id: str, data_str: str) -> None:
 
 def listar() -> list[dict]:
     """
-    Lista todas as campanhas (varre campaigns/), juntando state + briefing.
-    Ordena por id decrescente (mais recentes primeiro). Ignora pastas sem state.
+    Lista todas as campanhas (mais recentes primeiro), com o briefing aninhado.
+
+    O formato {**estado, "briefing": briefing} é mantido para preservar o
+    contrato com o dashboard da UI.
     """
     resultado: list[dict] = []
-    if not settings.CAMPAIGNS_DIR.exists():
-        return resultado
-    for d in sorted(settings.CAMPAIGNS_DIR.iterdir(), key=lambda p: p.name, reverse=True):
-        if not d.is_dir():
-            continue
-        estado = read_state(d.name)
-        if estado is None:
-            continue
-        briefing = {}
-        bp = d / "briefing.json"
-        if bp.exists():
-            briefing = json.loads(bp.read_text(encoding="utf-8"))
-        resultado.append({**estado, "briefing": briefing})
+    for campanha in store.list_campaigns():
+        briefing = {
+            "campaign_id": campanha["campaign_id"],
+            "area_direito": campanha["area_direito"],
+            "perfil_cliente_ideal": campanha["perfil_cliente_ideal"],
+            "tom": campanha["tom"],
+            "objetivo": campanha["objetivo"],
+            "tema_especifico": campanha["tema_especifico"] or "",
+            "formato": campanha["formato"],
+            "num_slides": campanha["num_slides"],
+            "referencias": campanha["referencias"] or "",
+            "created_at": campanha["created_at"],
+        }
+        resultado.append({**campanha, "briefing": briefing})
     return resultado
+
+
+def read_briefing(campaign_id: str) -> dict | None:
+    """Reconstrói o briefing a partir da row da campanha (compat com pipeline.regerar/server/exporter)."""
+    c = store.get_campaign(campaign_id)
+    if c is None:
+        return None
+    return {
+        "campaign_id": c["campaign_id"],
+        "area_direito": c["area_direito"],
+        "perfil_cliente_ideal": c["perfil_cliente_ideal"],
+        "tom": c["tom"],
+        "objetivo": c["objetivo"],
+        "tema_especifico": c["tema_especifico"] or "",
+        "formato": c["formato"],
+        "num_slides": c["num_slides"],
+        "referencias": c["referencias"] or "",
+        "created_at": c["created_at"],
+    }
+
+
+# --------------------------------------------------------------------------
+# Versionamento de copy
+# --------------------------------------------------------------------------
+def get_copy_version(campaign_id: str) -> int:
+    """Versão atual do copy (default 1)."""
+    c = store.get_campaign(campaign_id)
+    return int(c["copy_version"]) if c else 1
+
+
+def next_copy_version(campaign_id: str) -> int:
+    """Incrementa a versão e persiste. Usado pelo pipeline ao regerar."""
+    nova = get_copy_version(campaign_id) + 1
+    write_state(campaign_id, copy_version=nova)
+    return nova
+
+
+def save_copy_version(
+    campaign_id: str, versao: int, opcoes: list[dict], nota_ajuste: str = "",
+) -> None:
+    """Persiste uma versão de copy no DB. Usado pelo copy_generator."""
+    store.save_copy_version(campaign_id, versao, opcoes, nota_ajuste)
+
+
+def get_copy(campaign_id: str, versao: int | None = None) -> list[dict] | None:
+    """
+    Lê uma versão de copy do DB. Se `versao` for None, usa a versão corrente.
+
+    Usado por server._campaign_payload e exporter.export_approved.
+    """
+    if versao is None:
+        versao = get_copy_version(campaign_id)
+    return store.get_copy_version(campaign_id, versao)
+
+
+# Mantém o import de utils para não quebrar arquivos que dependiam transitive dele
+_ = utils  # noqa: F841
