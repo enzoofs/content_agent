@@ -10,9 +10,43 @@ indicando exatamente qual campo falhou.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from modules.utils import make_campaign_id
+
+# Padrões de tentativa de prompt injection nos campos livres do briefing.
+# Não é defesa absoluta (LLM pode obedecer instrução obfuscada), mas barra
+# o ataque trivial copy-paste tipo "Ignore previous instructions and...".
+# Bloqueamos textos que pareçam reescrever o system prompt do agente.
+_PROMPT_INJECTION_PATTERNS = [
+    r"\bignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)\b",
+    r"\bdisregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)\b",
+    r"\b(you|voc[eê])\s+(are|is|s[ãa]o)\s+(now|agora)\s+a\s+",
+    r"\bdesconsidere\s+(todas?\s+as\s+)?(instru[cç][õo]es?|regras?)\s+(anteriores?|acima)\b",
+    r"\bignor[ea]\s+(todas?\s+as\s+)?(instru[cç][õo]es?|prompts?|regras?)\s+(anteriores?|acima)\b",
+    r"^\s*\[?(system|assistant|user)\s*[:\]]",
+    r"<\s*system\s*>",
+    r"\bnew\s+(system\s+)?(prompt|instructions?)\s*[:=]",
+    r"###\s*(system|new\s+instructions?)",
+]
+_INJECTION_RE = re.compile("|".join(_PROMPT_INJECTION_PATTERNS), re.IGNORECASE | re.MULTILINE)
+
+
+def _check_prompt_injection(campo: str, valor: str) -> None:
+    """
+    Detecta padrões suspeitos de tentativa de override do system prompt.
+
+    Não tenta ser perfeito (LLM é o limite), mas barra o ataque óbvio.
+    Em produção real, isto vira input filter com modelo dedicado (Phi-3, Llama Guard, etc).
+    """
+    if not isinstance(valor, str) or not valor:
+        return
+    if _INJECTION_RE.search(valor):
+        raise ValueError(
+            f"Campo '{campo}' contém padrão suspeito de instrução pro modelo. "
+            "Reescreva sem tentar dar instruções diretas ao sistema."
+        )
 
 # Schema do briefing — TODOS OS CAMPOS SÃO OBRIGATÓRIOS
 BRIEFING_SCHEMA: dict[str, type] = {
@@ -82,6 +116,10 @@ def parse(briefing_raw: dict) -> dict:
                 f"Campo '{campo}' excede o limite de {limite} caracteres "
                 f"(recebido: {len(valor)})."
             )
+
+    # --- Anti prompt injection nos campos livres (vão direto pro prompt do LLM) ---
+    for campo in ("area_direito", "perfil_cliente_ideal", "tema_especifico", "referencias"):
+        _check_prompt_injection(campo, b.get(campo) or "")
 
     # --- Enums ---
     if b.get("tom") not in TONS_VALIDOS:

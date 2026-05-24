@@ -18,7 +18,7 @@ import argparse
 import sys
 
 from config import settings
-from modules import briefing_parser, campaign_store, pipeline, server, store
+from modules import briefing_parser, campaign_store, pipeline, server, store, utils
 
 
 # --------------------------------------------------------------------------
@@ -62,6 +62,30 @@ def _setup_db() -> None:
             f"{stats['copy_versions_inseridas']} versões de copy importadas do FS."
         )
     print(f"✓ Banco de estado em {settings.STATE_DB_PATH.name} pronto.")
+
+
+def _recover_orphan_campaigns() -> None:
+    """
+    Marca como erro toda campanha que ficou em status='gerando' há mais de 5min.
+
+    Por que: threads daemon morrem quando o processo é encerrado (Ctrl+C, kill,
+    crash). Sem isso, ao reabrir a central o usuário vê eternamente "Gerando..."
+    em campanhas órfãs. O DB lembra que tava gerando, mas ninguém mais está.
+
+    Conservador: 5min é margem confortável pra campanhas legítimas em andamento
+    no momento exato da inicialização (não deveria acontecer, mas garante).
+    """
+    orfas = store.find_orphan_campaigns(threshold_seconds=300)
+    if not orfas:
+        return
+    for cid in orfas:
+        campaign_store.set_erro(
+            cid,
+            "Geração interrompida — o processo foi reiniciado antes de concluir. "
+            "Solicite ajuste para regerar.",
+        )
+        utils.log(cid, "startup: campanha órfã detectada e marcada como erro.")
+    print(f"↻ {len(orfas)} campanha(s) órfã(s) recuperada(s) (marcadas como erro).")
 
 
 def _check_chromium() -> None:
@@ -190,6 +214,7 @@ def main() -> None:
         _check_credenciais()
         _check_chromium()
         _setup_db()
+        _recover_orphan_campaigns()
         server.serve()
         return
 
@@ -197,6 +222,7 @@ def main() -> None:
         _check_credenciais()
         _check_chromium()
         _setup_db()
+        _recover_orphan_campaigns()
         run_new_campaign_terminal()
         return
 

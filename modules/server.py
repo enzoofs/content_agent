@@ -37,6 +37,7 @@ from modules import (
     copy_generator,
     exporter,
     pipeline,
+    quotas,
     store,
     utils,
 )
@@ -275,6 +276,18 @@ def build_app() -> Flask:
     @app.route("/api/campaigns", methods=["POST"])
     def api_criar():
         body = request.get_json(force=True)
+        # 1) Quota antes de qualquer parse — falha cedo, sem custo
+        try:
+            quotas.verificar_pode_criar()
+        except quotas.QuotaExcedidaError as e:
+            return jsonify({
+                "erro": e.mensagem,
+                "tipo": "quota_excedida",
+                "quota": e.chave,
+                "atual": e.atual,
+                "limite": e.limite,
+            }), 429
+        # 2) Validação do briefing
         try:
             briefing = briefing_parser.parse(body)
         except ValueError as e:
@@ -284,6 +297,11 @@ def build_app() -> Flask:
         utils.log(briefing["campaign_id"], "server: campanha criada, iniciando geração.")
         _iniciar_geracao_async(briefing)
         return jsonify({"campaign_id": briefing["campaign_id"], "status": "gerando"}), 201
+
+    @app.route("/api/quotas", methods=["GET"])
+    def api_quotas():
+        """Snapshot atual das quotas — UI mostra banner amarelo/vermelho conforme."""
+        return jsonify(quotas.snapshot())
 
     @app.route("/api/campaigns/<cid>", methods=["GET"])
     def api_campanha(cid: str):
@@ -315,11 +333,69 @@ def build_app() -> Flask:
             "export_all_pngs": [str(p) for p in export["all_pngs"]],
         })
 
+    @app.route("/api/campaigns/<cid>/duplicate", methods=["POST"])
+    def api_duplicate(cid: str):
+        """
+        Cria uma nova campanha reusando o briefing de uma existente.
+
+        Gera novo campaign_id (data atual + sufixo se colidir), dispara geração.
+        Não copia copy/imagens — a regeração via IA produz variações novas.
+        Útil pra "quero outra rodada do mesmo tema" ou pivot de pequena escala.
+        """
+        original = campaign_store.read_briefing(cid)
+        if original is None:
+            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
+        try:
+            quotas.verificar_pode_criar()
+        except quotas.QuotaExcedidaError as e:
+            return jsonify({
+                "erro": e.mensagem, "tipo": "quota_excedida",
+                "quota": e.chave, "atual": e.atual, "limite": e.limite,
+            }), 429
+
+        # Briefing novo = mesmo conteúdo, sem campaign_id/created_at
+        # (briefing_parser.parse regenera ambos).
+        novo_raw = {
+            "area_direito": original["area_direito"],
+            "perfil_cliente_ideal": original["perfil_cliente_ideal"],
+            "tom": original["tom"],
+            "objetivo": original["objetivo"],
+            "tema_especifico": original["tema_especifico"],
+            "formato": original["formato"],
+            "num_slides": original["num_slides"],
+            "referencias": original["referencias"],
+        }
+        try:
+            briefing = briefing_parser.parse(novo_raw)
+        except ValueError as e:
+            return jsonify({"erro": f"Briefing original inválido: {e}"}), 400
+
+        campaign_store.criar(briefing)
+        utils.log(briefing["campaign_id"], f"server: duplicado de {cid}, iniciando geração.")
+        _iniciar_geracao_async(briefing)
+        return jsonify({
+            "campaign_id": briefing["campaign_id"],
+            "duplicada_de": cid,
+            "status": "gerando",
+        }), 201
+
     @app.route("/api/campaigns/<cid>/adjust", methods=["POST"])
     def api_adjust(cid: str):
         body = request.get_json(force=True)
         option_id = int(body["option_id"])
         nota = body.get("nota", "")
+        # Quota de regeração — cada chamada custa $$ em API
+        versao_atual = campaign_store.get_copy_version(cid)
+        try:
+            quotas.verificar_pode_regerar(versao_atual)
+        except quotas.QuotaExcedidaError as e:
+            return jsonify({
+                "erro": e.mensagem,
+                "tipo": "quota_excedida",
+                "quota": e.chave,
+                "atual": e.atual,
+                "limite": e.limite,
+            }), 429
         campaign_store.write_state(cid, status="ajuste_solicitado", etapa=None)
         utils.log(cid, f"server: ajuste solicitado (opção {option_id}): {nota}")
         _iniciar_regeracao_async(cid, nota)

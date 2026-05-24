@@ -70,6 +70,22 @@ def _build_html(
 
 _RENDER_TIMEOUT_MS = 15000  # 15s: tempo limite para a página + fontes carregarem.
 
+# Flags pra acelerar o boot do Chromium em ambiente headless de servidor.
+# - disable-dev-shm-usage: evita falhar por /dev/shm pequeno em containers
+# - disable-gpu: sem GPU em headless, evita inicializar pipeline gráfico
+# - disable-background-timer-throttling: contagem de timers consistente
+# - no-first-run: não tenta UI de primeira execução
+# Pre-warm "real" (manter browser entre chamadas) exige refactor pra worker
+# dedicado — fora do escopo do MVP. Ver docs/fase-2-roadmap.md.
+_CHROMIUM_ARGS = [
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--no-first-run",
+]
+
 
 def _render_with_browser(browser, html: str, output_path: Path, width: int, height: int) -> None:
     """
@@ -101,7 +117,7 @@ def _render_with_browser(browser, html: str, output_path: Path, width: int, heig
 def render_html_to_png(html: str, output_path: Path, width: int, height: int) -> None:
     """Renderiza HTML -> PNG via Playwright (abre e fecha um browser dedicado)."""
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(args=_CHROMIUM_ARGS)
         try:
             _render_with_browser(browser, html, output_path, width, height)
         finally:
@@ -161,7 +177,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
 
     paths: list[Path] = []
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(args=_CHROMIUM_ARGS)
         try:
             if formato == "carousel":
                 cta = copy_option["cta"]
@@ -220,7 +236,7 @@ def compose_all(
     out_dir = utils.campaign_composed_dir(campaign_id)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(args=_CHROMIUM_ARGS)
         try:
             if formato == "carousel":
                 return _compose_carousel(

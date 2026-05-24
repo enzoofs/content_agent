@@ -45,8 +45,21 @@ function route() {
 }
 
 // ====================== Dashboard ======================
+function dashSkeleton(n = 6) {
+  // Placeholder grid: 6 cards shimmer enquanto o fetch completa.
+  // Mais agradável que "Carregando..." centralizado — UI parece "quase pronta".
+  const cards = Array.from({ length: n }).map(() => `
+    <div class="skel-card">
+      <span class="skel skel-badge"></span>
+      <span class="skel skel-title"></span>
+      <span class="skel skel-line"></span>
+      <span class="skel skel-line short"></span>
+    </div>`).join("");
+  return `<h1 class="page-title">Campanhas</h1><div class="skeleton-grid">${cards}</div>`;
+}
+
 async function renderDashboard() {
-  app().innerHTML = `<p class="loading">Carregando campanhas…</p>`;
+  app().innerHTML = dashSkeleton();
   let campaigns;
   try {
     campaigns = await fetchJSON("/api/campaigns");
@@ -84,7 +97,37 @@ function dashCard(c) {
   if (c.data_agendada) {
     card.appendChild(textEl("p", "dash-card-date", `📅 ${formatDate(c.data_agendada)}`));
   }
+  // Duplicar — só faz sentido em campanhas já finalizadas (aprovada/aguardando/erro)
+  if (c.status !== "gerando" && c.status !== "ajuste_solicitado") {
+    const dupBtn = textEl("button", "dash-card-dup", "Duplicar");
+    dupBtn.type = "button";
+    dupBtn.title = "Criar nova campanha com o mesmo briefing";
+    dupBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      duplicarCampanha(c.campaign_id);
+    });
+    card.appendChild(dupBtn);
+  }
   return card;
+}
+
+async function duplicarCampanha(campaignId) {
+  try {
+    const res = await fetch(`/api/campaigns/${encodeURIComponent(campaignId)}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.erro || `Erro ao duplicar (HTTP ${res.status}).`);
+      return;
+    }
+    location.hash = `#/campanha/${encodeURIComponent(data.campaign_id)}`;
+  } catch (e) {
+    alert(`Falha ao duplicar: ${e.message}`);
+  }
 }
 
 // ====================== Nova campanha ======================

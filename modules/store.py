@@ -466,3 +466,57 @@ def delete_template(template_id: int) -> bool:
             "DELETE FROM briefing_templates WHERE id = ?", (template_id,)
         )
     return cur.rowcount > 0
+
+
+# --------------------------------------------------------------------------
+# Quotas / uso (single-tenant — vira por-tenant na fase 2)
+# --------------------------------------------------------------------------
+def quota_counts() -> dict[str, int]:
+    """
+    Calcula as contagens correntes de uso pra confronto com as quotas.
+
+    Retorna dict com:
+      - campanhas_mes: criadas no mês corrente (UTC simples — ISO date prefix)
+      - agendadas_futuro: campanhas com data_agendada > hoje
+      - pendentes_aprovacao: status ∈ {gerando, ajuste_solicitado, aguardando_aprovacao}
+    """
+    from datetime import date
+    hoje = date.today().isoformat()
+    mes_prefix = hoje[:7]  # YYYY-MM
+
+    with connect() as con:
+        row_mes = con.execute(
+            "SELECT COUNT(*) AS n FROM campaigns WHERE substr(created_at,1,7) = ?",
+            (mes_prefix,),
+        ).fetchone()
+        row_futuro = con.execute(
+            "SELECT COUNT(*) AS n FROM campaigns WHERE data_agendada IS NOT NULL AND data_agendada > ?",
+            (hoje,),
+        ).fetchone()
+        row_pendentes = con.execute(
+            "SELECT COUNT(*) AS n FROM campaigns "
+            "WHERE status IN ('gerando','ajuste_solicitado','aguardando_aprovacao')"
+        ).fetchone()
+
+    return {
+        "campanhas_mes": int(row_mes["n"]),
+        "agendadas_futuro": int(row_futuro["n"]),
+        "pendentes_aprovacao": int(row_pendentes["n"]),
+    }
+
+
+def find_orphan_campaigns(threshold_seconds: int = 300) -> list[str]:
+    """
+    Lista campanhas com status='gerando' cujo atualizado_em é mais antigo que
+    threshold_seconds. Indicador de thread daemon que morreu (kill do processo,
+    OOM, crash de Playwright) — devem ser marcadas como erro no startup.
+    """
+    from datetime import datetime, timedelta
+    limite = (datetime.now() - timedelta(seconds=threshold_seconds)).isoformat(timespec="seconds")
+    with connect() as con:
+        rows = con.execute(
+            "SELECT campaign_id FROM campaigns "
+            "WHERE status = 'gerando' AND atualizado_em < ?",
+            (limite,),
+        ).fetchall()
+    return [r["campaign_id"] for r in rows]

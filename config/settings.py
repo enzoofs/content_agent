@@ -84,6 +84,11 @@ COPY_MAX_TOKENS = 2000
 # Quantas variações de copy geramos por campanha
 NUM_COPY_OPTIONS = 3
 
+# Temperature da chamada de geração de copy. Default OpenAI é 1.0; subimos
+# pra 0.95 + instrução explícita no prompt pra cada opção ter ÂNGULO distinto
+# (vs. as 3 saídas serem variações cosméticas do mesmo texto).
+OPENAI_COPY_TEMPERATURE = 0.95
+
 # --------------------------------------------------------------------------
 # Geração de arte — Ideogram
 # --------------------------------------------------------------------------
@@ -147,3 +152,24 @@ APPROVAL_PORT = 5000
 
 # Nome de quem aprova (vai para os metadados de export)
 APPROVED_BY = "Henrique Mendes"
+
+# --------------------------------------------------------------------------
+# Quotas / prevenção de abuse
+# --------------------------------------------------------------------------
+# Limites globais aplicados antes da fase 2 (multi-tenant). Na fase 2 isso
+# vira `PLANOS = {essencial: {...}, profissional: {...}}` indexado por tenant.
+#
+# Filosofia:
+# - "mes": evita cliente queimar API/budget em janela curta
+# - "agendadas_futuro": evita criar pro ano todo no 1º mês e abandonar
+# - "pendentes_aprovacao": força fechar ciclo antes de abrir novo
+# - "regeracoes_por_campanha": cap em revisão infinita (cada regera custa $)
+QUOTAS = {
+    "campanhas_mes":            30,   # criações no mês corrente
+    "agendadas_futuro":         20,   # com data_agendada > hoje
+    "pendentes_aprovacao":      10,   # status em (gerando, ajuste_solicitado, aguardando_aprovacao)
+    "regeracoes_por_campanha":   5,   # copy_version máxima permitida
+}
+
+# Soft warning quando atingir esse % da quota (UI fica amarela)
+QUOTA_WARN_THRESHOLD = 0.7

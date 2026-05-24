@@ -104,6 +104,13 @@ REGRAS DE COPY:
 6. Hashtags: forneça de 8 a 15. TODAS em minúsculas, SEM acentos, SEM espaços, SEM caracteres especiais e SEM erros de digitação (cada hashtag é uma palavra única ou palavras coladas, ex.: "direitomedico", "advocaciabh"). Misture três tipos: termos amplos da área, termos de nicho do tema específico, e termos locais quando fizer sentido ("belohorizonte", "bh", "minasgerais"). Nunca crie hashtags cafonas, com números promocionais ou inventadas.
 7. O image_prompt (em INGLÊS) deve descrever uma cena PROFISSIONAL, REALISTA e ACESSÍVEL — escritório pequeno ou médio, ambiente brasileiro de classe média, NUNCA luxuoso (sem mármore, palácios, lustres, ornamentos opulentos). Evite clichê jurídico (balança, martelo). Inclua NO MÁXIMO 1 ou 2 PESSOAS (idealmente 1) — diversidade obrigatória (gênero/etnia variados ao longo das opções). Evite multidões, mãos em close-up, interações complexas (apertos de mão em primeiro plano, vários braços, etc).
 
+DIFERENCIAÇÃO OBRIGATÓRIA ENTRE AS 3 OPÇÕES (não-negociável):
+- Opção 1 — POSICIONAMENTO/AUTORIDADE: tom mais institucional, aborda do ponto de vista da expertise. Headline afirma um fato técnico ou tese.
+- Opção 2 — DOR DO CLIENTE: tom mais provocativo, parte de uma situação problema concreta que o cliente já viveu ou teme. Headline é uma pergunta ou cena.
+- Opção 3 — EDUCATIVO/INFORMATIVO: tom didático, ensina algo útil em si mesmo. Headline promete aprendizado ou revela algo pouco conhecido.
+
+Cada opção deve ter headline, body e image_prompt nitidamente diferentes — NUNCA reescrita cosmética da outra. Se as 3 opções se parecerem demais, você falhou.
+
 FORMATO DE RESPOSTA:
 Responda APENAS com um JSON válido. O JSON deve ser um objeto com a chave "options" contendo uma lista de exatamente 3 objetos, cada um com os campos: option_id (1,2,3), headline, subheadline, body, caption, cta, hashtags (lista de strings sem #), image_prompt (em inglês), style_notes. Sem texto antes ou depois. Sem markdown.\
 """
@@ -136,6 +143,13 @@ Responda APENAS com um JSON válido. O JSON deve ser um objeto com a chave "opti
 - hashtags (lista de strings sem #)
 - style_notes (string)
 - slides (lista de objetos com slide_id 1..N, headline, subheadline, body, image_prompt)
+
+DIFERENCIAÇÃO OBRIGATÓRIA ENTRE AS 3 OPÇÕES (não-negociável):
+- Opção 1 — POSICIONAMENTO/AUTORIDADE: carrossel institucional, abre afirmando uma tese. Cada slide constrói credibilidade técnica.
+- Opção 2 — DOR DO CLIENTE: carrossel que parte de um problema concreto. Slide 1 hook emocional/situação; slides intermediários aprofundam consequências; último slide oferece o caminho.
+- Opção 3 — EDUCATIVO/INFORMATIVO: carrossel didático no formato "5 erros que…" ou "passo a passo". Cada slide entrega 1 ideia útil que se sustenta sozinha.
+
+Cada opção deve ter headlines, bodies e image_prompts nitidamente diferentes entre si — NUNCA reescrita cosmética uma da outra.
 
 A quantidade exata de slides será informada na mensagem do usuário. Sem texto antes ou depois. Sem markdown.\
 """
@@ -320,6 +334,7 @@ def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[dic
             response = client.chat.completions.create(
                 model=settings.OPENAI_MODEL,
                 max_tokens=settings.COPY_MAX_TOKENS,
+                temperature=settings.OPENAI_COPY_TEMPERATURE,
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": system_prompt},
