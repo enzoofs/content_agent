@@ -42,10 +42,33 @@ def make_campaign_id(area_direito: str, tema_especifico: str = "") -> str:
     Gera o campaign_id no formato YYYY-MM-DD_slug.
 
     Usa o tema específico como base do slug quando houver; senão, a área.
+    Se já existir uma campanha com esse id no DB (ou pasta legada em
+    CAMPAIGNS_DIR), anexa sufixo incremental (-2, -3, ...) — evita sobrescrita
+    silenciosa quando duas campanhas iguais são criadas no mesmo dia.
     """
+    # Import tardio: evita ciclo (store -> settings -> utils em alguns fluxos).
+    from modules import store
+
     base = tema_especifico.strip() or area_direito
     data = datetime.now().strftime("%Y-%m-%d")
-    return f"{data}_{slugify(base)}"
+    candidato = f"{data}_{slugify(base)}"
+
+    def _ocupado(cid: str) -> bool:
+        # Considera "ocupado" tanto registros no DB quanto pastas antigas (pré-migration)
+        if (settings.CAMPAIGNS_DIR / cid).exists():
+            return True
+        try:
+            return store.campaign_id_exists(cid)
+        except Exception:
+            # DB ainda não inicializado (ex.: durante import) — usa só o filesystem
+            return False
+
+    if not _ocupado(candidato):
+        return candidato
+    contador = 2
+    while _ocupado(f"{candidato}-{contador}"):
+        contador += 1
+    return f"{candidato}-{contador}"
 
 
 def campaign_dir(campaign_id: str) -> Path:
