@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>TimeLabs — Estratégia Comercial · Mendes & Vaz · MMXXVI</title>
+<meta name="description" content="Relatório de estratégia comercial e pricing para fechamento do contrato piloto Mendes & Vaz — TimeLabs">
+<style>
+  @font-face { font-family: 'Gloock'; src: url('fonts/Gloock-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; font-style: italic; src: url('fonts/InstrumentSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; src: url('fonts/InstrumentSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; src: url('fonts/IBMPlexSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-weight: 700; src: url('fonts/IBMPlexSerif-Bold.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-style: italic; src: url('fonts/IBMPlexSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; src: url('fonts/IBMPlexMono-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; font-weight: 700; src: url('fonts/IBMPlexMono-Bold.ttf') format('truetype'); font-display: swap; }
+
+  :root {
+    --paper:      #EFE9DA;
+    --paper-alt:  #FAF8F2;
+    --paper-deep: #E6DFC9;
+    --ink:        #2B2520;
+    --ink-soft:   #6B6258;
+    --ink-faint:  rgba(43,37,32,0.55);
+    --mercury:    #B8902E;
+    --mercury-bright: #E0B03A;
+    --rule:       rgba(43,37,32,0.18);
+    --rule-light: rgba(43,37,32,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  @page { size: A4 portrait; margin: 0; }
+
+  html, body {
+    background: #1a1714;
+    color: var(--ink);
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    background: var(--paper);
+    margin: 0 auto;
+    padding: 26mm 22mm 24mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-child { page-break-after: avoid; }
+
+  @media screen {
+    body { padding: 32px 0; }
+    .page {
+      margin-bottom: 32px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 6px 20px rgba(0,0,0,0.35);
+    }
+  }
+
+  .hex-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+  .hex-bg svg { width: 100%; height: 100%; display: block; }
+  .page > *:not(.hex-bg) { position: relative; z-index: 1; }
+
+  .reg-mark {
+    position: absolute; width: 12px; height: 12px; opacity: 0.32;
+  }
+  .reg-mark::before, .reg-mark::after {
+    content: ""; position: absolute; background: var(--ink-soft);
+  }
+  .reg-mark::before { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+  .reg-mark::after  { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+  .reg-tl { top: 8mm; left: 8mm; }
+  .reg-tr { top: 8mm; right: 8mm; }
+  .reg-bl { bottom: 8mm; left: 8mm; }
+  .reg-br { bottom: 8mm; right: 8mm; }
+
+  .font-display { font-family: 'Gloock', Georgia, serif; }
+  .font-italic  { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; }
+  .font-mono    { font-family: 'IBM Plex Mono', monospace; }
+  .text-mercury { color: var(--mercury); }
+  .text-soft    { color: var(--ink-soft); }
+  .em { color: var(--mercury); font-style: italic; }
+
+  .folio {
+    position: absolute;
+    bottom: 14mm;
+    left: 50%; transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 4px;
+    color: var(--ink-soft); opacity: 0.65; text-transform: uppercase;
+    z-index: 2;
+  }
+
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 12mm;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule-light);
+  }
+  .section-head .left {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 4px;
+    color: var(--mercury); text-transform: uppercase;
+  }
+  .section-head .right {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft); text-transform: uppercase; opacity: 0.75;
+  }
+
+  h2 {
+    font-family: 'Gloock', serif;
+    font-weight: normal;
+    line-height: 1.12;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+  h2 .em { color: var(--mercury); font-style: normal; }
+
+  .lead {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 10.5pt;
+    line-height: 1.65;
+    color: var(--ink-soft);
+  }
+
+  /* CAPA */
+  .page-capa {
+    align-items: center;
+    justify-content: space-between;
+    padding: 30mm 22mm;
+  }
+  .capa-top {
+    width: 100%;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .capa-top .label-block {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft); text-transform: uppercase;
+    line-height: 1.9; opacity: 0.78;
+  }
+  .capa-top .label-block .v { color: var(--ink); opacity: 1; }
+  .capa-top .right { text-align: right; }
+
+  .capa-center {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    width: 100%; padding: 0 8mm;
+  }
+  .capa-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 7px;
+    color: var(--ink-soft); text-transform: uppercase;
+    margin-bottom: 28px; opacity: 0.85;
+  }
+  .capa-titulo {
+    font-family: 'Gloock', serif;
+    font-size: 44pt;
+    line-height: 1.05;
+    text-align: center;
+    color: var(--ink);
+    letter-spacing: -1.2px;
+    max-width: 16ch;
+  }
+  .capa-titulo .em { color: var(--mercury); }
+  .capa-tagline {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 17pt; color: var(--ink-soft);
+    text-align: center; margin-top: 22px; letter-spacing: 0.3px;
+    max-width: 38ch; line-height: 1.35;
+  }
+  .capa-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 5px;
+    color: var(--ink-soft); text-transform: uppercase;
+    margin-top: 16px;
+  }
+
+  .capa-bottom {
+    width: 100%;
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .capa-bottom .field-label { opacity: 0.6; margin-bottom: 5px; display: block; }
+  .capa-bottom .field-value {
+    color: var(--ink); font-size: 9.5pt; letter-spacing: 1px;
+    font-family: 'IBM Plex Serif', serif; text-transform: none;
+  }
+
+  /* TESE */
+  .tese-quote {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 28pt; line-height: 1.22;
+    color: var(--ink); letter-spacing: 0.3px;
+    max-width: 22ch;
+    margin-bottom: 16mm;
+  }
+  .tese-quote .em { color: var(--mercury); font-style: italic; }
+
+  .tese-body {
+    display: grid; grid-template-columns: 40px 1fr; gap: 24px;
+    align-items: start;
+    margin-bottom: 14mm;
+  }
+  .tese-body .gold-stripe {
+    width: 2px; height: 100%;
+    background: var(--mercury); opacity: 0.85;
+    margin-left: 16px;
+    min-height: 80mm;
+  }
+  .tese-body p {
+    font-size: 11.5pt; line-height: 1.75;
+    color: var(--ink); max-width: 56ch;
+  }
+  .tese-body p + p { margin-top: 12px; color: var(--ink-soft); }
+
+  .tese-signed {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .tese-signed .name {
+    color: var(--ink); font-family: 'Gloock', serif;
+    font-size: 14pt; letter-spacing: 0.5px;
+    text-transform: none;
+  }
+
+  /* CONTEXTO — perfil cliente */
+  .ctx-h2 { font-size: 26pt; max-width: 17ch; margin-bottom: 8px; }
+  .ctx-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .ctx-signals {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 10mm;
+  }
+  .ctx-cell {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 12px 14px;
+    position: relative;
+  }
+  .ctx-cell::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 18px; height: 2px;
+    background: var(--mercury);
+  }
+  .ctx-cell .c-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .ctx-cell .c-value {
+    font-family: 'Gloock', serif; font-size: 13pt;
+    color: var(--ink); line-height: 1.2; margin-bottom: 6px;
+    letter-spacing: -0.2px;
+  }
+  .ctx-cell .c-desc {
+    font-size: 9pt; color: var(--ink-soft); line-height: 1.55;
+  }
+
+  .ctx-posic {
+    margin-top: auto; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 13pt; color: var(--ink-soft);
+    text-align: center;
+    max-width: 70ch; margin-left: auto; margin-right: auto;
+    line-height: 1.45;
+  }
+  .ctx-posic .em { color: var(--mercury); }
+
+  /* CUSTOS */
+  .cost-h2 { font-size: 26pt; max-width: 16ch; margin-bottom: 8px; }
+  .cost-lead { max-width: 60ch; margin-bottom: 8mm; }
+
+  .cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 8mm;
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+  }
+  .cost-table th, .cost-table td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--rule-light);
+    font-size: 9.5pt;
+  }
+  .cost-table th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2px;
+    color: var(--mercury); text-transform: uppercase;
+    background: var(--paper-deep);
+  }
+  .cost-table td:first-child {
+    font-family: 'Gloock', serif; font-size: 11pt; color: var(--ink);
+  }
+  .cost-table .num {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--ink); font-size: 9.5pt;
+  }
+  .cost-table tr:last-child td { border-bottom: none; }
+  .cost-table tfoot td {
+    background: var(--paper-deep);
+    font-family: 'Gloock', serif;
+    color: var(--mercury);
+    font-size: 12pt;
+  }
+
+  .cost-summary {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 6mm;
+  }
+  .cost-summary .cs-cell .cs-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7pt; letter-spacing: 2.5px;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .cost-summary .cs-cell .cs-value {
+    font-family: 'Gloock', serif; font-size: 18pt;
+    color: var(--ink); letter-spacing: -0.5px; line-height: 1.1;
+  }
+  .cost-summary .cs-cell .cs-value .sub {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 9pt; color: var(--ink-soft);
+    letter-spacing: 0; margin-left: 3px;
+  }
+  .cost-summary .cs-cell.gold .cs-value { color: var(--mercury); }
+
+  .cost-foot {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 11pt; color: var(--ink-soft);
+    text-align: center; line-height: 1.5;
+    max-width: 72ch; margin: auto auto 0;
+    padding-top: 8mm;
+  }
+  .cost-foot .em { color: var(--mercury); }
+
+  /* MERCADO */
+  .mkt-h2 { font-size: 26pt; max-width: 18ch; margin-bottom: 8px; }
+  .mkt-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .mkt-bands {
+    display: flex; flex-direction: column;
+    margin-bottom: 8mm;
+    border-top: 1px solid var(--rule-light);
+  }
+  .mkt-row {
+    display: grid;
+    grid-template-columns: 1.4fr 0.9fr 2fr;
+    gap: 18px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule-light);
+    align-items: baseline;
+  }
+  .mkt-row .m-faixa {
+    font-family: 'Gloock', serif; font-size: 12.5pt;
+    line-height: 1.2; letter-spacing: -0.2px; color: var(--ink);
+  }
+  .mkt-row .m-valor {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10pt; color: var(--mercury); letter-spacing: 0.5px;
+  }
+  .mkt-row .m-desc {
+    font-size: 9.5pt; color: var(--ink-soft); line-height: 1.55;
+  }
+  .mkt-row.us { background: var(--paper-deep); padding-left: 10px; padding-right: 10px; }
+  .mkt-row.us .m-faixa { color: var(--mercury); }
+
+  .mkt-insight {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    border-left: 3px solid var(--mercury);
+    padding: 14px 18px;
+    margin-top: auto;
+  }
+  .mkt-insight .mi-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .mkt-insight .mi-text {
+    font-size: 10pt; line-height: 1.6; color: var(--ink);
+  }
+  .mkt-insight .mi-text strong { color: var(--ink); }
+
+  /* FAIXAS */
+  .fx-h2 { font-size: 26pt; max-width: 16ch; margin-bottom: 8px; }
+  .fx-lead { max-width: 60ch; margin-bottom: 10mm; }
+
+  .fx-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    flex: 1;
+  }
+  .fx-card {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 18px 20px 16px;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .fx-card.gold { border-color: var(--mercury); border-width: 1.5px; }
+  .fx-card::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 28px; height: 2px;
+    background: var(--mercury);
+  }
+  .fx-card .fx-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .fx-card .fx-name {
+    font-family: 'Gloock', serif; font-size: 19pt;
+    line-height: 1.1; letter-spacing: -0.4px;
+    color: var(--ink); margin-bottom: 8px;
+  }
+  .fx-card .fx-price {
+    font-family: 'Gloock', serif; font-size: 36pt;
+    color: var(--mercury); letter-spacing: -1.5px; line-height: 1;
+    margin-bottom: 2px;
+  }
+  .fx-card .fx-price .sub {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 11pt; color: var(--ink-soft);
+    letter-spacing: 0; margin-left: 4px;
+  }
+  .fx-card .fx-anchor {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7pt; letter-spacing: 1.5px;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .fx-card .fx-list {
+    list-style: none;
+    font-size: 9.5pt; color: var(--ink-soft);
+    line-height: 1.6;
+    border-top: 1px solid var(--rule-light);
+    padding-top: 10px;
+  }
+  .fx-card .fx-list li {
+    padding-left: 14px; position: relative;
+    margin-bottom: 4px;
+  }
+  .fx-card .fx-list li::before {
+    content: "·"; position: absolute; left: 2px; color: var(--mercury);
+    font-weight: bold; font-size: 12pt; line-height: 1;
+  }
+  .fx-card .fx-list li strong { color: var(--ink); }
+  .fx-card .fx-margin {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px dashed var(--rule-light);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 1.5px;
+    color: var(--ink-faint); text-transform: uppercase;
+  }
+  .fx-card .fx-margin .v {
+    color: var(--mercury); font-size: 9pt; letter-spacing: 0.5px;
+  }
+
+  .fx-floor {
+    margin-top: 6mm;
+    background: var(--paper-deep);
+    border: 1px dashed var(--mercury);
+    padding: 12px 16px;
+    display: grid; grid-template-columns: auto 1fr; gap: 14px;
+    align-items: center;
+  }
+  .fx-floor .ff-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+  }
+  .fx-floor .ff-text {
+    font-size: 9.5pt; color: var(--ink); line-height: 1.5;
+  }
+  .fx-floor .ff-text strong { color: var(--ink); font-weight: 700; }
+
+  /* TÁTICA */
+  .tac-h2 { font-size: 26pt; max-width: 18ch; margin-bottom: 8px; }
+  .tac-lead { max-width: 62ch; margin-bottom: 8mm; }
+
+  .tac-steps {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-bottom: 6mm;
+  }
+  .tac-step {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 12px 16px;
+    display: grid; grid-template-columns: 38px 1fr; gap: 14px;
+    position: relative;
+  }
+  .tac-step::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 22px; height: 2px;
+    background: var(--mercury);
+  }
+  .tac-step .ts-num {
+    font-family: 'Gloock', serif; font-size: 22pt;
+    color: var(--mercury); letter-spacing: -1px; line-height: 1;
+  }
+  .tac-step .ts-body .ts-title {
+    font-family: 'Gloock', serif; font-size: 12.5pt;
+    color: var(--ink); margin-bottom: 4px; letter-spacing: -0.2px;
+  }
+  .tac-step .ts-body .ts-text {
+    font-size: 9.5pt; color: var(--ink-soft); line-height: 1.55;
+  }
+  .tac-step .ts-body .ts-text strong { color: var(--ink); }
+  .tac-step .ts-body .ts-script {
+    margin-top: 6px;
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 10.5pt; color: var(--mercury);
+    padding-left: 10px; border-left: 2px solid var(--mercury);
+    line-height: 1.45;
+  }
+
+  .tac-trigger {
+    background: var(--paper-deep);
+    border: 1px solid var(--mercury);
+    padding: 14px 18px;
+    margin-top: auto;
+  }
+  .tac-trigger .tt-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .tac-trigger .tt-text {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 13pt; color: var(--ink); line-height: 1.5;
+  }
+  .tac-trigger .tt-text .em { color: var(--mercury); }
+
+  /* CHECKLIST */
+  .ck-h2 { font-size: 26pt; max-width: 17ch; margin-bottom: 8px; }
+  .ck-lead { max-width: 62ch; margin-bottom: 8mm; }
+
+  .ck-section {
+    margin-bottom: 6mm;
+  }
+  .ck-section-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 8px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .ck-section-title .ctx {
+    color: var(--ink-faint); letter-spacing: 1.5px;
+    font-size: 7pt;
+  }
+
+  .ck-list {
+    list-style: none;
+  }
+  .ck-list li {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--rule-light);
+    align-items: baseline;
+  }
+  .ck-list li:last-child { border-bottom: none; }
+  .ck-list .box {
+    width: 12px; height: 12px;
+    border: 1.5px solid var(--mercury);
+    display: inline-block;
+    transform: translateY(2px);
+  }
+  .ck-list .txt {
+    font-size: 9.5pt; color: var(--ink); line-height: 1.5;
+  }
+  .ck-list .txt .sub {
+    color: var(--ink-soft); font-size: 8.5pt; display: block; margin-top: 2px;
+  }
+  .ck-list .due {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 1.5px;
+    color: var(--mercury); text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* CTA */
+  .cta-main {
+    flex: 1; display: flex; flex-direction: column;
+    justify-content: center; text-align: center; padding: 0 12mm;
+  }
+  .cta-main h2 {
+    font-size: 30pt; font-weight: normal;
+    line-height: 1.14; letter-spacing: -0.5px;
+    max-width: 22ch; margin: 0 auto;
+  }
+  .cta-main h2 .em { color: var(--mercury); font-style: normal; }
+  .cta-main .subtitle {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 16pt; color: var(--ink-soft); margin-top: 14px;
+  }
+
+  .cta-box {
+    display: inline-flex; flex-direction: column; align-items: center;
+    background: var(--paper-alt);
+    border: 1.5px solid var(--mercury);
+    padding: 18px 44px 20px;
+    margin: 28px auto 0;
+    position: relative;
+  }
+  .cta-box::before, .cta-box::after {
+    content: ""; position: absolute;
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--mercury);
+  }
+  .cta-box::before { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+  .cta-box::after  { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+  .cta-box .cta-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--mercury);
+    margin-bottom: 8px;
+  }
+  .cta-box .cta-text {
+    font-family: 'Gloock', serif; font-size: 16pt;
+    letter-spacing: 0.3px; color: var(--ink);
+  }
+  .cta-box .cta-note {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 2px;
+    color: var(--ink-soft); text-transform: uppercase; margin-top: 10px;
+  }
+
+  .contact-strip {
+    margin-top: 28px; padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px;
+  }
+  .contact-item .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--ink-soft);
+    opacity: 0.72; margin-bottom: 5px;
+  }
+  .contact-item .value {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 12pt; color: var(--ink); letter-spacing: 0.2px;
+  }
+
+  .colofao {
+    margin-top: 18px; padding-top: 12px;
+    border-top: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--ink-soft);
+    opacity: 0.78;
+  }
+  .colofao .center { text-align: center; flex: 1; }
+
+  @media print {
+    html, body { background: #fff; padding: 0; }
+    .page { margin: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hex-paper" width="38.105" height="66" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#2B2520" stroke-opacity="0.06" stroke-width="0.7">
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(0,0)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(38.105,0)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(0,66)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(38.105,66)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(19.0526,33)"/>
+      </g>
+    </pattern>
+  </defs>
+</svg>
+
+<!-- ============================================================
+     PÁGINA 1 — CAPA
+     ============================================================ -->
+<section class="page page-capa">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="capa-top">
+    <div class="label-block">
+      <span class="v">ESTRATÉGIA COMERCIAL</span><br>
+      PRICING · PILOTO · DEMO
+    </div>
+    <div class="label-block right">
+      <span class="v">TIMELABS.COM.BR</span><br>
+      MMXXVI · MAIO
+    </div>
+  </div>
+
+  <div class="capa-center">
+    <p class="capa-eyebrow">CUSTO · MERCADO · FECHAMENTO</p>
+    <h1 class="capa-titulo">Estratégia <span class="em">Comercial</span> Mendes &amp; Vaz</h1>
+    <p class="capa-tagline">Tudo o que precisa ser pensado, decidido e fechado até o dia da demo.</p>
+    <p class="capa-sub">Documento de apoio interno · TimeLabs</p>
+  </div>
+
+  <div class="capa-bottom">
+    <div>
+      <span class="field-label">Cliente</span>
+      <span class="field-value">Mendes &amp; Vaz Advogados</span>
+    </div>
+    <div>
+      <span class="field-label">Praça</span>
+      <span class="field-value">Belo Horizonte · MG</span>
+    </div>
+    <div>
+      <span class="field-label">Apresentação</span>
+      <span class="field-value">28 de maio de 2026</span>
+    </div>
+    <div>
+      <span class="field-label">Documento</span>
+      <span class="field-value">v1 · 25.05.26</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 2 — TESE
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">I · TESE</span>
+    <span class="right">Por que entrar barato é correto aqui</span>
+  </div>
+
+  <blockquote class="tese-quote">
+    O primeiro cliente não paga preço de mercado — ele paga em <span class="em">depoimento, atrito e calibração</span>.
+  </blockquote>
+
+  <div class="tese-body">
+    <div class="gold-stripe"></div>
+    <div>
+      <p>A TimeLabs nunca operou em produção. O Mendes &amp; Vaz é o caso onde se descobre, em uso real, o que o sistema faz bem e onde precisa apertar — esse aprendizado vale mais hoje do que qualquer margem.</p>
+      <p>Por isso, o preço do piloto é estratégico, não comercial. Ele precisa ser baixo o bastante para que dois sócios mão de vaca não recusem (recusaram R$ 175 do Astrea), e alto o bastante para o cliente sentir que é fornecedor pago — não favor de amigo. Favor exige o dobro do trabalho e nunca vira depoimento real.</p>
+      <p>O alvo, então, é um intervalo de fechamento entre <span class="em">R$ 247 e R$ 447 por mês</span>, com tabela cheia de mercado documentada para reajuste em 6 meses. A escolha entre as duas faixas se decide na reunião — não antes.</p>
+    </div>
+  </div>
+
+  <div class="tese-signed">
+    <span>Engenharia &amp; Comercial · MMXXVI</span>
+    <span class="name">TimeLabs</span>
+  </div>
+
+  <div class="folio">II · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 3 — CONTEXTO DO CLIENTE
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">II · CONTEXTO</span>
+    <span class="right">Quem é o cliente · sinais lidos</span>
+  </div>
+
+  <h2 class="ctx-h2">O perfil que <span class="em">define</span> o teto do preço.</h2>
+  <p class="lead ctx-lead">Mendes &amp; Vaz é um escritório novo, dois sócios operando sozinhos, ainda construindo base de clientes. A reunião inicial deixou claro que o orçamento é apertado e que decisões financeiras passam por filtro duplo. Isso não é defeito — é o ponto de partida do desenho da oferta.</p>
+
+  <div class="ctx-signals">
+    <div class="ctx-cell">
+      <div class="c-label">— Sinal 01</div>
+      <div class="c-value">Recusaram R$ 175 do Astrea</div>
+      <div class="c-desc">Promoção de 12 meses em ferramenta de gestão jurídica consagrada. Mostra que o teto psicológico para "ferramenta" está abaixo desse valor — mas serviço é categoria mental diferente, tende a tolerar mais.</div>
+    </div>
+    <div class="ctx-cell">
+      <div class="c-label">— Sinal 02</div>
+      <div class="c-value">Dois sócios, sem time</div>
+      <div class="c-desc">Toda decisão financeira é debatida internamente. Vantagem: não há comprador intermediário a convencer. Risco: qualquer dúvida adia o fechamento por uma semana.</div>
+    </div>
+    <div class="ctx-cell">
+      <div class="c-label">— Sinal 03</div>
+      <div class="c-value">Escritório recém-aberto</div>
+      <div class="c-desc">Precisam de presença digital para captar clientes. A dor existe — só não estão dispostos a pagar para resolvê-la em escala de agência tradicional. Ponto a explorar.</div>
+    </div>
+    <div class="ctx-cell">
+      <div class="c-label">— Sinal 04</div>
+      <div class="c-value">Sem benchmark de agência</div>
+      <div class="c-desc">Provavelmente não pediram orçamento a uma agência de marketing jurídico — se tivessem, R$ 1.000 a R$ 2.500/mês seria a referência. Ancoragem própria a construir na reunião.</div>
+    </div>
+  </div>
+
+  <p class="ctx-posic">
+    A TimeLabs aqui não compete com o Astrea (software de gestão) e sim com uma agência de social media — <span class="em">categoria de gasto diferente, posicionamento diferente</span>, valor percebido potencialmente maior pelo mesmo bolso.
+  </p>
+
+  <div class="folio">III · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 4 — CUSTO OPERACIONAL
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">III · CUSTO OPERACIONAL</span>
+    <span class="right">Quanto sai do bolso pra entregar</span>
+  </div>
+
+  <h2 class="cost-h2">O <span class="em">custo real</span> de servir Mendes &amp; Vaz.</h2>
+  <p class="lead cost-lead">Cada campanha gera 3 variações de post: uma chamada à OpenAI (gpt-4o) devolve copy das três peças em JSON único, e três chamadas ao Ideogram (V_2) geram as artes de fundo. A composição tipográfica é local — custo zero.</p>
+
+  <table class="cost-table">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Cenário simples</th>
+        <th>Cenário carrossel (4 slides)</th>
+        <th>Observação</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>OpenAI · gpt-4o</td>
+        <td class="num">≈ US$ 0,026</td>
+        <td class="num">≈ US$ 0,026</td>
+        <td>1 call cobre 3 variações</td>
+      </tr>
+      <tr>
+        <td>Ideogram · V_2</td>
+        <td class="num">US$ 0,24</td>
+        <td class="num">US$ 0,96</td>
+        <td>3 ou 12 imagens / campanha</td>
+      </tr>
+      <tr>
+        <td>Playwright · render</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td>Local, sem custo</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>Total por campanha</td>
+        <td class="num">US$ 0,27 · R$ 1,40</td>
+        <td class="num">US$ 0,99 · R$ 5,15</td>
+        <td>câmbio ≈ 5,20</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="cost-summary">
+    <div class="cs-cell">
+      <div class="cs-label">— Quota piso</div>
+      <div class="cs-value">8<span class="sub">campanhas/mês</span></div>
+    </div>
+    <div class="cs-cell">
+      <div class="cs-label">— Quota teto</div>
+      <div class="cs-value">20<span class="sub">campanhas/mês</span></div>
+    </div>
+    <div class="cs-cell gold">
+      <div class="cs-label">— API · Faixa A</div>
+      <div class="cs-value">R$ 15<span class="sub">/mês</span></div>
+    </div>
+    <div class="cs-cell gold">
+      <div class="cs-label">— API · Faixa B</div>
+      <div class="cs-value">R$ 40<span class="sub">/mês</span></div>
+    </div>
+  </div>
+
+  <p class="cost-foot">
+    O custo de API é desprezível diante de qualquer faixa cobrável — o limite real é <span class="em">o seu tempo</span> de operação, suporte e ajustes. Custos de infra (Postgres, hospedagem, storage) só entram na fase 2.
+  </p>
+
+  <div class="folio">IV · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 5 — MERCADO
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">IV · MERCADO</span>
+    <span class="right">Onde a oferta se posiciona</span>
+  </div>
+
+  <h2 class="mkt-h2">O que o mercado <span class="em">cobra</span> por social media em 2026.</h2>
+  <p class="lead mkt-lead">Referências coletadas de tabelas públicas (Blog SMAM, Social Media SP, Aintegrare, Duna Design). Não foi possível confirmar piso específico de Belo Horizonte para nicho jurídico — marketing jurídico costuma puxar para a faixa alta por exigência de conteúdo regulamentado pela OAB.</p>
+
+  <div class="mkt-bands">
+    <div class="mkt-row">
+      <div class="m-faixa">Freelancer iniciante</div>
+      <div class="m-valor">R$ 800 – 1.500</div>
+      <div class="m-desc">4 posts por semana, sem estratégia. Faixa de entrada do mercado nacional.</div>
+    </div>
+    <div class="mkt-row">
+      <div class="m-faixa">Social media pleno</div>
+      <div class="m-valor">R$ 1.000 – 2.500</div>
+      <div class="m-desc">12 posts/mês com planejamento, criação, postagem e interação.</div>
+    </div>
+    <div class="mkt-row">
+      <div class="m-faixa">Pacote 4 posts/semana</div>
+      <div class="m-valor">R$ 628 (média)</div>
+      <div class="m-desc">Tabela média nacional — apenas execução, sem estratégia ou métricas.</div>
+    </div>
+    <div class="mkt-row">
+      <div class="m-faixa">Pacote 8 posts/semana</div>
+      <div class="m-valor">R$ 945 (média)</div>
+      <div class="m-desc">Mesma operação, dobro do volume — tabela média nacional.</div>
+    </div>
+    <div class="mkt-row">
+      <div class="m-faixa">Agência / sênior especializado</div>
+      <div class="m-valor">R$ 4.000 – 10.000+</div>
+      <div class="m-desc">Marketing jurídico premium, time dedicado, relatórios mensais.</div>
+    </div>
+    <div class="mkt-row us">
+      <div class="m-faixa">TimeLabs · faixa proposta</div>
+      <div class="m-valor">R$ 247 – 447</div>
+      <div class="m-desc">Abaixo do piso de mercado, posicionada como condição de piloto-de-validação por tempo determinado.</div>
+    </div>
+  </div>
+
+  <div class="mkt-insight">
+    <div class="mi-label">— Insight de ancoragem</div>
+    <div class="mi-text">
+      O argumento na reunião não é <strong>"somos baratos"</strong>, é <strong>"a tabela cheia segue a referência de R$ 1.000+, e o piloto trava um valor de entrada por seis meses em troca de depoimento"</strong>. Isso preserva valor percebido e evita comoditizar o serviço — quando o Gui DJ ou a próxima agência chegarem, o preço de tabela não estará amarrado ao que M&amp;V pagou.
+    </div>
+  </div>
+
+  <div class="folio">V · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 6 — DUAS FAIXAS
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">V · OFERTA</span>
+    <span class="right">As duas faixas pra levar na reunião</span>
+  </div>
+
+  <h2 class="fx-h2">Duas faixas, <span class="em">uma decisão</span> no ato.</h2>
+  <p class="lead fx-lead">Levar ambas pra mesa permite ler o cliente antes de fechar. A escolha entre A e B se calibra pela reação aos primeiros minutos da conversa — pelo orçamento que sinalizarem espontaneamente.</p>
+
+  <div class="fx-grid">
+    <div class="fx-card">
+      <div class="fx-tag">— FAIXA A · ENTRADA SEGURA</div>
+      <div class="fx-name">Essencial</div>
+      <div class="fx-price">R$ 247<span class="sub">/ mês</span></div>
+      <div class="fx-anchor">Para fechar mesmo se eles travarem</div>
+      <ul class="fx-list">
+        <li><strong>8 campanhas/mês</strong> (≈ 2 posts/semana)</li>
+        <li>3 variações por campanha</li>
+        <li>Briefing por formulário</li>
+        <li>Aprovação na central de controle</li>
+        <li>Edição manual de copy ilimitada</li>
+        <li>Suporte por WhatsApp em horário comercial</li>
+        <li>Exportação em PNG + caption pronta</li>
+      </ul>
+      <div class="fx-margin">
+        Custo API ≈ R$ 15<br>
+        Margem bruta · <span class="v">R$ 232/mês</span>
+      </div>
+    </div>
+
+    <div class="fx-card gold">
+      <div class="fx-tag">— FAIXA B · ÂNCORA ALTA</div>
+      <div class="fx-name">Presença Ativa</div>
+      <div class="fx-price">R$ 447<span class="sub">/ mês</span></div>
+      <div class="fx-anchor">Para quando houver abertura clara</div>
+      <ul class="fx-list">
+        <li><strong>20 campanhas/mês</strong> (≈ 5 posts/semana)</li>
+        <li>3 variações por campanha</li>
+        <li>Briefing por formulário</li>
+        <li>Aprovação na central de controle</li>
+        <li>Edição manual de copy ilimitada</li>
+        <li>Revisão estratégica mensal de 30 min</li>
+        <li>Prioridade no suporte (WhatsApp)</li>
+        <li>Calendário editorial compartilhado</li>
+      </ul>
+      <div class="fx-margin">
+        Custo API ≈ R$ 40<br>
+        Margem bruta · <span class="v">R$ 407/mês</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fx-floor">
+    <span class="ff-label">— Piso absoluto</span>
+    <span class="ff-text">
+      Não descer de <strong>R$ 197/mês</strong> mesmo sob pressão. Abaixo disso o cliente sente que é favor — favor exige o dobro do trabalho e nunca vira depoimento real. <strong>Melhor sair da mesa do que fechar em R$ 150.</strong>
+    </span>
+  </div>
+
+  <div class="folio">VI · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 7 — TÁTICA DE REUNIÃO
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VI · TÁTICA</span>
+    <span class="right">Como apresentar na reunião do dia 28</span>
+  </div>
+
+  <h2 class="tac-h2">Ancora <span class="em">invertida</span> · leitura · gatilho de fechamento.</h2>
+  <p class="lead tac-lead">A sequência abaixo está calibrada para o perfil mão de vaca. A premissa é apresentar a faixa alta primeiro (para ancorar valor) e descer para a baixa só se houver hesitação — o cliente percebe que ganhou desconto sem que o desconto exista de fato.</p>
+
+  <div class="tac-steps">
+    <div class="tac-step">
+      <div class="ts-num">01</div>
+      <div class="ts-body">
+        <div class="ts-title">Demo primeiro, preço depois</div>
+        <div class="ts-text">Mostrar o sistema funcionando, gerar uma campanha ao vivo para o Henrique, deixar a beleza do output falar antes de qualquer número. <strong>Nunca falar de preço antes da demo</strong>.</div>
+      </div>
+    </div>
+
+    <div class="tac-step">
+      <div class="ts-num">02</div>
+      <div class="ts-body">
+        <div class="ts-title">Ancorar tabela cheia de mercado</div>
+        <div class="ts-text">Mencionar que <strong>agência de social media pra advocacia cobra de R$ 1.000 a R$ 4.000/mês</strong>. Não pra comparar — pra contextualizar. Cliente que não pesquisou ainda não sabe disso.</div>
+        <div class="ts-script">"Pra você ter ideia, agência tradicional cobra R$ 1.500 pra fazer 12 posts no mês. Nosso pacote completo é R$ 447 e entrega 20."</div>
+      </div>
+    </div>
+
+    <div class="tac-step">
+      <div class="ts-num">03</div>
+      <div class="ts-body">
+        <div class="ts-title">Pausa · ler a cara</div>
+        <div class="ts-text">Após dizer R$ 447, <strong>silêncio</strong>. Não preencher o vazio. O Henrique vai sinalizar com expressão, com pergunta, com "hmm..." — esse é o dado mais valioso da reunião inteira.</div>
+      </div>
+    </div>
+
+    <div class="tac-step">
+      <div class="ts-num">04</div>
+      <div class="ts-body">
+        <div class="ts-title">Se travou · descer para Essencial</div>
+        <div class="ts-text">Apresentar a Faixa A como <strong>"entrada pra escritório que está começando, R$ 247, e a gente sobe quando vocês virem o retorno"</strong>. Eles escolhem A sentindo que pegaram desconto — e nenhum desconto foi dado.</div>
+        <div class="ts-script">"Faz mais sentido começar com o Essencial. Vocês validam o resultado em 60 dias e a gente conversa sobre subir o volume depois."</div>
+      </div>
+    </div>
+
+    <div class="tac-step">
+      <div class="ts-num">05</div>
+      <div class="ts-body">
+        <div class="ts-title">Se houver abertura · fechar B direto</div>
+        <div class="ts-text">Se eles perguntarem o que vem incluso, ou sinalizarem que querem crescer rápido, ou já tinham orçamento separado pra marketing — <strong>fechar a Faixa B sem oferecer a A</strong>. A A vira "tabela enxuta para casos específicos", não a opção padrão.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tac-trigger">
+    <div class="tt-label">— Gatilho de fechamento universal</div>
+    <div class="tt-text">
+      "Como vocês seriam nosso primeiro cliente formal, posso travar esse valor por <span class="em">6 meses sem reajuste</span>, em troca de depoimento em vídeo após 60 dias e autorização pra usar Mendes &amp; Vaz como case. Topam?"
+    </div>
+  </div>
+
+  <div class="folio">VII · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 8 — CHECKLIST
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VII · CHECKLIST</span>
+    <span class="right">O que decidir antes do dia 28</span>
+  </div>
+
+  <h2 class="ck-h2">Pontos a <span class="em">fechar</span> antes da demo.</h2>
+  <p class="lead ck-lead">Cada item abaixo está pendente de decisão do Enzo. Sem isso fechado, o pricing entra na reunião com brecha — e brecha sob pressão de cliente novo costuma virar concessão indevida.</p>
+
+  <div class="ck-section">
+    <div class="ck-section-title">
+      <span>— Comercial &amp; jurídico</span>
+      <span class="ctx">Travar até 27/05</span>
+    </div>
+    <ul class="ck-list">
+      <li>
+        <span class="box"></span>
+        <span class="txt">Definir a forma jurídica do contrato
+          <span class="sub">PJ TimeLabs? CNPJ próprio? Contrato MEI ou simples acordo bilateral assinado?</span>
+        </span>
+        <span class="due">25/05</span>
+      </li>
+      <li>
+        <span class="box"></span>
+        <span class="txt">Modelo de contrato curto (1–2 páginas) com escopo, prazo, valor, cláusula de depoimento
+          <span class="sub">Inclui SLA de suporte, política de cancelamento (aviso prévio de 30 dias) e direito de uso da marca M&amp;V como case.</span>
+        </span>
+        <span class="due">26/05</span>
+      </li>
+      <li>
+        <span class="box"></span>
+        <span class="txt">Forma de cobrança definida
+          <span class="sub">PIX recorrente manual? Boleto? Cobrança via Asaas/InfinitePay? Decidir antes de oferecer pra evitar atrito no fechamento.</span>
+        </span>
+        <span class="due">26/05</span>
+      </li>
+      <li>
+        <span class="box"></span>
+        <span class="txt">Política de reajuste após 6 meses
+          <span class="sub">Vai para tabela cheia (qual valor?) ou renovação no piloto? Definir antes pra responder se eles perguntarem.</span>
+        </span>
+        <span class="due">27/05</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="ck-section">
+    <div class="ck-section-title">
+      <span>— Material de apresentação</span>
+      <span class="ctx">Pronto até 27/05</span>
+    </div>
+    <ul class="ck-list">
+      <li>
+        <span class="box"></span>
+        <span class="txt">Relatório de implementação (Fase 1) impresso ou PDF aberto
+          <span class="sub">Já existe — Mendes-Vaz-Social-Relatorio-Implementacao.pdf. Levar tablet ou notebook pra mostrar.</span>
+        </span>
+        <span class="due">PRONTO</span>
+      </li>
+      <li>
+        <span class="box"></span>
+        <span class="txt">3 a 5 campanhas pré-geradas como amostra
+          <span class="sub">Gerar antes da reunião pra não depender de internet/API no momento da demo. Imprimir em papel se possível.</span>
+        </span>
+        <span class="due">27/05</span>
+      </li>
+      <li>
+        <span class="box"></span>
+        <span class="txt">Demo ao vivo testada (1 campanha do zero em &lt; 90s)
+          <span class="sub">Garantir que a quota não está zerada, .env preenchido, Chromium instalado, Wi-Fi funcionando no local.</span>
+        </span>
+        <span class="due">28/05 manhã</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="ck-section">
+    <div class="ck-section-title">
+      <span>— Pós-fechamento (se fechar)</span>
+      <span class="ctx">Primeiros 7 dias</span>
+    </div>
+    <ul class="ck-list">
+      <li>
+        <span class="box"></span>
+        <span class="txt">Onboarding: 1 briefing presencial pra calibrar tom de voz, áreas, exemplos de "bom" e "ruim"
+          <span class="sub">Sem isso, as primeiras 2 semanas viram retrabalho infinito.</span>
+        </span>
+        <span class="due">Semana 1</span>
+      </li>
+      <li>
+        <span class="box"></span>
+        <span class="txt">Setup do canal de suporte (grupo de WhatsApp Business)
+          <span class="sub">Separar da conversa pessoal. Definir horários de resposta declarados.</span>
+        </span>
+        <span class="due">Dia D + 1</span>
+      </li>
+      <li>
+        <span class="box"></span>
+        <span class="txt">Métrica de sucesso acordada (qualitativa) pra check-in de 30 dias
+          <span class="sub">Não engajamento (depende deles publicar) — satisfação com qualidade do output e tempo gasto pelo Henrique.</span>
+        </span>
+        <span class="due">Reunião de fechamento</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="folio">VIII · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 9 — CTA
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VIII · CONCLUSÃO</span>
+    <span class="right">Próximo marco</span>
+  </div>
+
+  <div class="cta-main">
+    <h2>O pricing está calibrado.<br>A reunião <span class="em">decide</span> a faixa.</h2>
+    <p class="subtitle">Ler o cliente importa mais do que defender o número.</p>
+
+    <div class="cta-box">
+      <div class="cta-label">— DEMO &amp; FECHAMENTO —</div>
+      <div class="cta-text">28 de maio de 2026 · Mendes &amp; Vaz</div>
+      <div class="cta-note">Belo Horizonte · primeira venda formal TimeLabs</div>
+    </div>
+  </div>
+
+  <div class="contact-strip">
+    <div class="contact-item">
+      <div class="label">— Documento</div>
+      <div class="value">Estratégia Comercial v1</div>
+    </div>
+    <div class="contact-item">
+      <div class="label">— Autor</div>
+      <div class="value">Enzo Ferraz</div>
+    </div>
+    <div class="contact-item">
+      <div class="label">— Atualizado</div>
+      <div class="value">25.05.2026</div>
+    </div>
+  </div>
+
+  <div class="colofao">
+    <span>TIMELABS · MMXXVI</span>
+    <span class="center">DOCUMENTO INTERNO · CONFIDENCIAL</span>
+    <span>IX · IX</span>
+  </div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>TimeLabs — Diagnóstico · Mendes & Vaz · MMXXVI</title>
+<meta name="description" content="Diagnóstico técnico do problema de produção de conteúdo do escritório Mendes & Vaz — TimeLabs">
+<style>
+  @font-face { font-family: 'Gloock'; src: url('fonts/Gloock-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; font-style: italic; src: url('fonts/InstrumentSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; src: url('fonts/InstrumentSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; src: url('fonts/IBMPlexSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-weight: 700; src: url('fonts/IBMPlexSerif-Bold.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-style: italic; src: url('fonts/IBMPlexSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; src: url('fonts/IBMPlexMono-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; font-weight: 700; src: url('fonts/IBMPlexMono-Bold.ttf') format('truetype'); font-display: swap; }
+
+  :root {
+    --paper:      #EFE9DA;
+    --paper-alt:  #FAF8F2;
+    --paper-deep: #E6DFC9;
+    --ink:        #2B2520;
+    --ink-soft:   #6B6258;
+    --ink-faint:  rgba(43,37,32,0.55);
+    --mercury:    #B8902E;
+    --mercury-bright: #E0B03A;
+    --rule:       rgba(43,37,32,0.18);
+    --rule-light: rgba(43,37,32,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  @page { size: A4 portrait; margin: 0; }
+
+  html, body {
+    background: #1a1714;
+    color: var(--ink);
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    background: var(--paper);
+    margin: 0 auto;
+    padding: 26mm 22mm 24mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-child { page-break-after: avoid; }
+
+  @media screen {
+    body { padding: 32px 0; }
+    .page {
+      margin-bottom: 32px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 6px 20px rgba(0,0,0,0.35);
+    }
+  }
+
+  .hex-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+  .hex-bg svg { width: 100%; height: 100%; display: block; }
+  .page > *:not(.hex-bg) { position: relative; z-index: 1; }
+
+  .reg-mark {
+    position: absolute; width: 12px; height: 12px; opacity: 0.32;
+  }
+  .reg-mark::before, .reg-mark::after {
+    content: ""; position: absolute; background: var(--ink-soft);
+  }
+  .reg-mark::before { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+  .reg-mark::after  { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+  .reg-tl { top: 8mm; left: 8mm; }
+  .reg-tr { top: 8mm; right: 8mm; }
+  .reg-bl { bottom: 8mm; left: 8mm; }
+  .reg-br { bottom: 8mm; right: 8mm; }
+
+  .font-display { font-family: 'Gloock', Georgia, serif; }
+  .font-italic  { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; }
+  .font-mono    { font-family: 'IBM Plex Mono', monospace; }
+  .text-mercury { color: var(--mercury); }
+  .text-soft    { color: var(--ink-soft); }
+  .em { color: var(--mercury); font-style: italic; }
+
+  .folio {
+    position: absolute;
+    bottom: 14mm;
+    left: 50%; transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 4px;
+    color: var(--ink-soft); opacity: 0.65; text-transform: uppercase;
+    z-index: 2;
+  }
+
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 12mm;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule-light);
+  }
+  .section-head .left {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 4px;
+    color: var(--mercury); text-transform: uppercase;
+  }
+  .section-head .right {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft); text-transform: uppercase; opacity: 0.75;
+  }
+
+  h2 {
+    font-family: 'Gloock', serif;
+    font-weight: normal;
+    line-height: 1.12;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+  h2 .em { color: var(--mercury); font-style: normal; }
+
+  .lead {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 10.5pt;
+    line-height: 1.65;
+    color: var(--ink-soft);
+  }
+
+  /* ============================================================
+     CAPA
+     ============================================================ */
+  .page-capa {
+    align-items: center;
+    justify-content: space-between;
+    padding: 30mm 22mm;
+  }
+  .capa-top {
+    width: 100%;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .capa-top .label-block {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft); text-transform: uppercase;
+    line-height: 1.9; opacity: 0.78;
+  }
+  .capa-top .label-block .v { color: var(--ink); opacity: 1; }
+  .capa-top .right { text-align: right; }
+
+  .capa-center {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    width: 100%; padding: 0 8mm;
+  }
+  .capa-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 7px;
+    color: var(--ink-soft); text-transform: uppercase;
+    margin-bottom: 28px; opacity: 0.85;
+  }
+  .capa-titulo {
+    font-family: 'Gloock', serif;
+    font-size: 52pt;
+    line-height: 1.02;
+    text-align: center;
+    color: var(--ink);
+    letter-spacing: -1.5px;
+    max-width: 14ch;
+  }
+  .capa-titulo .em { color: var(--mercury); }
+  .capa-tagline {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 17pt; color: var(--ink-soft);
+    text-align: center; margin-top: 22px; letter-spacing: 0.3px;
+    max-width: 38ch; line-height: 1.35;
+  }
+  .capa-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 5px;
+    color: var(--ink-soft); text-transform: uppercase;
+    margin-top: 16px;
+  }
+
+  .capa-bottom {
+    width: 100%;
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .capa-bottom .field-label { opacity: 0.6; margin-bottom: 5px; display: block; }
+  .capa-bottom .field-value {
+    color: var(--ink); font-size: 9.5pt; letter-spacing: 1px;
+    font-family: 'IBM Plex Serif', serif; text-transform: none;
+  }
+
+  /* ============================================================
+     SÍNTESE (página 2) — o que ouvimos
+     ============================================================ */
+  .sint-h2 { font-size: 26pt; max-width: 17ch; margin-bottom: 8px; }
+  .sint-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .sint-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 10mm;
+  }
+  .sint-cell {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 14px 16px;
+    position: relative;
+  }
+  .sint-cell::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 22px; height: 2px;
+    background: var(--mercury);
+  }
+  .sint-cell .s-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .sint-cell .s-title {
+    font-family: 'Gloock', serif; font-size: 13pt;
+    color: var(--ink); line-height: 1.2; margin-bottom: 6px;
+    letter-spacing: -0.2px;
+  }
+  .sint-cell .s-desc {
+    font-size: 9pt; color: var(--ink-soft); line-height: 1.55;
+  }
+  .sint-cell .s-desc strong { color: var(--ink); }
+
+  .sint-quote {
+    margin-top: auto; padding: 14px 20px;
+    border-left: 3px solid var(--mercury);
+    background: var(--paper-alt);
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 13pt; color: var(--ink); line-height: 1.4;
+    max-width: 78ch;
+  }
+  .sint-quote .em { color: var(--mercury); }
+  .sint-quote .attr {
+    font-family: 'IBM Plex Mono', monospace; font-style: normal;
+    font-size: 7.5pt; letter-spacing: 2px; color: var(--ink-faint);
+    text-transform: uppercase; display: block; margin-top: 8px;
+  }
+
+  /* ============================================================
+     DIAGNÓSTICO TÉCNICO — 5 eixos
+     ============================================================ */
+  .dx-h2 { font-size: 26pt; max-width: 18ch; margin-bottom: 8px; }
+  .dx-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .dx-list {
+    flex: 1;
+    display: flex; flex-direction: column;
+    border-top: 1px solid var(--rule-light);
+  }
+  .dx-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 110px;
+    gap: 18px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule-light);
+    align-items: baseline;
+  }
+  .dx-row .d-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; color: var(--mercury);
+    letter-spacing: 1.5px;
+  }
+  .dx-row .d-body .d-title {
+    font-family: 'Gloock', serif; font-size: 13pt;
+    line-height: 1.18; letter-spacing: -0.2px; color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .dx-row .d-body .d-text {
+    font-size: 9.5pt; color: var(--ink-soft); line-height: 1.55;
+  }
+  .dx-row .d-body .d-text strong { color: var(--ink); }
+  .dx-row .d-grav {
+    text-align: right;
+  }
+  .dx-row .d-grav .gv-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 6.5pt; letter-spacing: 1.5px;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .dx-row .d-grav .gv-value {
+    font-family: 'Gloock', serif; font-size: 13pt;
+    color: var(--mercury); letter-spacing: -0.3px;
+    line-height: 1;
+  }
+
+  /* ============================================================
+     RISCO ESPECÍFICO — mismatch ads x organico
+     ============================================================ */
+  .rc-h2 { font-size: 27pt; max-width: 18ch; margin-bottom: 8px; }
+  .rc-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .rc-flow {
+    display: grid; grid-template-columns: 1fr 32px 1fr; gap: 0;
+    margin-bottom: 10mm;
+  }
+  .rc-box {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 14px 18px;
+    position: relative;
+  }
+  .rc-box.bad { border-color: var(--mercury); border-width: 1.5px; }
+  .rc-box .rc-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .rc-box .rc-title {
+    font-family: 'Gloock', serif; font-size: 14pt;
+    color: var(--ink); line-height: 1.15; margin-bottom: 8px;
+    letter-spacing: -0.2px;
+  }
+  .rc-box .rc-desc {
+    font-size: 9pt; color: var(--ink-soft); line-height: 1.55;
+  }
+  .rc-arrow {
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Gloock', serif; font-size: 26pt;
+    color: var(--mercury);
+  }
+
+  .rc-conclusion {
+    margin-top: auto;
+    background: var(--paper-deep);
+    border: 1px solid var(--mercury);
+    border-left: 3px solid var(--mercury);
+    padding: 16px 20px;
+  }
+  .rc-conclusion .rc-c-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .rc-conclusion .rc-c-text {
+    font-size: 10.5pt; color: var(--ink); line-height: 1.6;
+  }
+  .rc-conclusion .rc-c-text strong { color: var(--ink); font-weight: 700; }
+  .rc-conclusion .rc-c-text .em { color: var(--mercury); font-style: italic; }
+
+  /* ============================================================
+     PIVÔ DIREITO MÉDICO
+     ============================================================ */
+  .pv-h2 { font-size: 26pt; max-width: 17ch; margin-bottom: 8px; }
+  .pv-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .pv-stats {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 8mm;
+  }
+  .pv-stats .ps-cell .ps-value {
+    font-family: 'Gloock', serif; font-size: 28pt;
+    color: var(--mercury); line-height: 1; letter-spacing: -1px;
+  }
+  .pv-stats .ps-cell .ps-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 1.5px;
+    color: var(--ink-soft); margin-top: 8px;
+    text-transform: uppercase; line-height: 1.55;
+  }
+
+  .pv-cards {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 6mm;
+  }
+  .pv-card {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 12px 15px;
+    position: relative;
+  }
+  .pv-card::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 20px; height: 2px;
+    background: var(--mercury);
+  }
+  .pv-card .pc-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7pt; letter-spacing: 2px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .pv-card .pc-title {
+    font-family: 'Gloock', serif; font-size: 11pt;
+    color: var(--ink); line-height: 1.2; margin-bottom: 4px;
+    letter-spacing: -0.2px;
+  }
+  .pv-card .pc-desc {
+    font-size: 8.5pt; color: var(--ink-soft); line-height: 1.5;
+  }
+  .pv-card .pc-desc strong { color: var(--ink); }
+
+  .pv-conclusion {
+    margin-top: auto; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 12pt; color: var(--ink-soft);
+    text-align: center;
+    max-width: 72ch; margin-left: auto; margin-right: auto;
+    line-height: 1.45;
+  }
+  .pv-conclusion .em { color: var(--mercury); }
+
+  /* ============================================================
+     PRESCRIÇÃO
+     ============================================================ */
+  .px-h2 { font-size: 26pt; max-width: 17ch; margin-bottom: 8px; }
+  .px-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .px-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    margin-bottom: 8mm;
+  }
+  .px-table th, .px-table td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule-light);
+    font-size: 9pt;
+    vertical-align: top;
+  }
+  .px-table th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2px;
+    color: var(--mercury); text-transform: uppercase;
+    background: var(--paper-deep);
+  }
+  .px-table td.gap {
+    font-family: 'Gloock', serif; font-size: 11pt; color: var(--ink);
+    width: 32%; letter-spacing: -0.2px;
+  }
+  .px-table td.fix {
+    color: var(--ink-soft); line-height: 1.5;
+  }
+  .px-table td.fix strong { color: var(--ink); }
+  .px-table td.kpi {
+    width: 18%;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; color: var(--mercury);
+    letter-spacing: 0.5px;
+  }
+  .px-table tr:last-child td { border-bottom: none; }
+
+  .px-foot {
+    margin-top: auto;
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 12pt; color: var(--ink-soft);
+    text-align: center; line-height: 1.5;
+    max-width: 70ch; margin-left: auto; margin-right: auto;
+    padding-top: 8px;
+  }
+  .px-foot .em { color: var(--mercury); }
+
+  /* ============================================================
+     MÉTRICAS / KPI
+     ============================================================ */
+  .kp-h2 { font-size: 26pt; max-width: 17ch; margin-bottom: 8px; }
+  .kp-lead { max-width: 62ch; margin-bottom: 10mm; }
+
+  .kp-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin-bottom: 8mm;
+  }
+  .kp-cell {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 14px 16px;
+  }
+  .kp-cell .k-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .kp-cell .k-from-to {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 6px;
+  }
+  .kp-cell .k-from {
+    font-family: 'Gloock', serif; font-size: 16pt;
+    color: var(--ink-faint); letter-spacing: -0.5px;
+    text-decoration: line-through; text-decoration-thickness: 1px;
+  }
+  .kp-cell .k-arrow {
+    font-family: 'Gloock', serif; font-size: 16pt;
+    color: var(--mercury);
+  }
+  .kp-cell .k-to {
+    font-family: 'Gloock', serif; font-size: 22pt;
+    color: var(--ink); letter-spacing: -0.5px;
+  }
+  .kp-cell .k-desc {
+    font-size: 9pt; color: var(--ink-soft); line-height: 1.5;
+  }
+  .kp-cell .k-desc strong { color: var(--ink); }
+
+  .kp-foot {
+    margin-top: auto; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 12pt; color: var(--ink-soft);
+    text-align: center; line-height: 1.5;
+    max-width: 72ch; margin-left: auto; margin-right: auto;
+  }
+  .kp-foot .em { color: var(--mercury); }
+
+  /* ============================================================
+     CTA
+     ============================================================ */
+  .cta-main {
+    flex: 1; display: flex; flex-direction: column;
+    justify-content: center; text-align: center; padding: 0 12mm;
+  }
+  .cta-main h2 {
+    font-size: 30pt; font-weight: normal;
+    line-height: 1.14; letter-spacing: -0.5px;
+    max-width: 22ch; margin: 0 auto;
+  }
+  .cta-main h2 .em { color: var(--mercury); font-style: normal; }
+  .cta-main .subtitle {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 16pt; color: var(--ink-soft); margin-top: 14px;
+  }
+
+  .cta-box {
+    display: inline-flex; flex-direction: column; align-items: center;
+    background: var(--paper-alt);
+    border: 1.5px solid var(--mercury);
+    padding: 18px 44px 20px;
+    margin: 28px auto 0;
+    position: relative;
+  }
+  .cta-box::before, .cta-box::after {
+    content: ""; position: absolute;
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--mercury);
+  }
+  .cta-box::before { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+  .cta-box::after  { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+  .cta-box .cta-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--mercury);
+    margin-bottom: 8px;
+  }
+  .cta-box .cta-text {
+    font-family: 'Gloock', serif; font-size: 16pt;
+    letter-spacing: 0.3px; color: var(--ink);
+  }
+  .cta-box .cta-note {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 2px;
+    color: var(--ink-soft); text-transform: uppercase; margin-top: 10px;
+  }
+
+  .contact-strip {
+    margin-top: 28px; padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px;
+  }
+  .contact-item .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--ink-soft);
+    opacity: 0.72; margin-bottom: 5px;
+  }
+  .contact-item .value {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 12pt; color: var(--ink); letter-spacing: 0.2px;
+  }
+
+  .colofao {
+    margin-top: 18px; padding-top: 12px;
+    border-top: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--ink-soft);
+    opacity: 0.78;
+  }
+  .colofao .center { text-align: center; flex: 1; }
+
+  /* ============================================================
+     TESE
+     ============================================================ */
+  .tese-quote {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 28pt; line-height: 1.22;
+    color: var(--ink); letter-spacing: 0.3px;
+    max-width: 22ch;
+    margin-bottom: 16mm;
+  }
+  .tese-quote .em { color: var(--mercury); font-style: italic; }
+
+  .tese-body {
+    display: grid; grid-template-columns: 40px 1fr; gap: 24px;
+    align-items: start;
+    margin-bottom: 14mm;
+  }
+  .tese-body .gold-stripe {
+    width: 2px; height: 100%;
+    background: var(--mercury); opacity: 0.85;
+    margin-left: 16px;
+    min-height: 80mm;
+  }
+  .tese-body p {
+    font-size: 11.5pt; line-height: 1.75;
+    color: var(--ink); max-width: 56ch;
+  }
+  .tese-body p + p { margin-top: 12px; color: var(--ink-soft); }
+
+  .tese-signed {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .tese-signed .name {
+    color: var(--ink); font-family: 'Gloock', serif;
+    font-size: 14pt; letter-spacing: 0.5px;
+    text-transform: none;
+  }
+
+  @media print {
+    html, body { background: #fff; padding: 0; }
+    .page { margin: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hex-paper" width="38.105" height="66" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#2B2520" stroke-opacity="0.06" stroke-width="0.7">
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(0,0)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(38.105,0)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(0,66)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(38.105,66)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(19.0526,33)"/>
+      </g>
+    </pattern>
+  </defs>
+</svg>
+
+<!-- ============================================================
+     PÁGINA 1 — CAPA
+     ============================================================ -->
+<section class="page page-capa">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="capa-top">
+    <div class="label-block">
+      <span class="v">DIAGNÓSTICO</span><br>
+      DO BRIEFING AO DOCUMENTO · 7 DIAS
+    </div>
+    <div class="label-block right">
+      <span class="v">TIMELABS.COM.BR</span><br>
+      MMXXVI · MAIO
+    </div>
+  </div>
+
+  <div class="capa-center">
+    <p class="capa-eyebrow">PRESENÇA · CONTEÚDO · DIREITO MÉDICO</p>
+    <h1 class="capa-titulo">Diagnóstico <span class="em">Mendes</span> &amp; Vaz</h1>
+    <p class="capa-tagline">Onde está o gargalo, por que ele drena recurso, e o que o tratamento exige.</p>
+    <p class="capa-sub">Entregue por TimeLabs</p>
+  </div>
+
+  <div class="capa-bottom">
+    <div>
+      <span class="field-label">Cliente</span>
+      <span class="field-value">Mendes &amp; Vaz Advogados</span>
+    </div>
+    <div>
+      <span class="field-label">Praça</span>
+      <span class="field-value">Belo Horizonte · MG</span>
+    </div>
+    <div>
+      <span class="field-label">Entrega</span>
+      <span class="field-value">28 de maio de 2026</span>
+    </div>
+    <div>
+      <span class="field-label">Documento</span>
+      <span class="field-value">v1 · 25.05.26</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 2 — TESE
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">I · TESE</span>
+    <span class="right">Em uma frase</span>
+  </div>
+
+  <blockquote class="tese-quote">
+    O problema do Mendes &amp; Vaz não é falta de presença digital. É falta de <span class="em">sistema</span> de produção.
+  </blockquote>
+
+  <div class="tese-body">
+    <div class="gold-stripe"></div>
+    <div>
+      <p>O escritório já posta no Instagram, já investe em Meta Ads e está estruturando tráfego pago. Não é um cliente que precisa ser convencido a estar online — ele já está, e já paga para amplificar o que publica.</p>
+      <p>O gargalo é anterior ao anúncio: a produção de conteúdo orgânico depende de tempo manual dos sócios, sem cadência fixa, sem identidade visual coerente e sem um motor que transforme briefings de tema em peças prontas para publicar. Esse é o ponto exato em que o investimento em tráfego pago amplifica algo frágil, em vez de algo robusto.</p>
+      <p>Este diagnóstico mapeia onde o gargalo aparece, qual o custo de mantê-lo, e qual sistema o resolve — com prescrição técnica, métricas verificáveis e marco de execução em <span class="em">duas semanas</span>.</p>
+    </div>
+  </div>
+
+  <div class="tese-signed">
+    <span>Diagnóstico técnico · MMXXVI</span>
+    <span class="name">TimeLabs</span>
+  </div>
+
+  <div class="folio">II · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 3 — SÍNTESE DO BRIEFING (O QUE OUVIMOS)
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">II · SÍNTESE</span>
+    <span class="right">O que ouvimos no briefing</span>
+  </div>
+
+  <h2 class="sint-h2">O ponto de partida, <span class="em">conforme dito</span> por vocês.</h2>
+  <p class="lead sint-lead">Antes do diagnóstico próprio, registramos a leitura objetiva do que foi compartilhado na reunião inicial. Se algum item abaixo estiver inexato, o diagnóstico se reescreve em torno do que for corrigido.</p>
+
+  <div class="sint-grid">
+    <div class="sint-cell">
+      <div class="s-label">— ÁREAS DE ATUAÇÃO</div>
+      <div class="s-title">Civil, médico e empresarial</div>
+      <div class="s-desc">Três áreas declaradas, com <strong>esforço deliberado de foco em direito médico</strong> — sinaliza intenção de nichar e construir autoridade vertical, não escritório generalista.</div>
+    </div>
+
+    <div class="sint-cell">
+      <div class="s-label">— DOR PRINCIPAL</div>
+      <div class="s-title">Produção de conteúdo é manual e drena tempo</div>
+      <div class="s-desc">Gerar conteúdo para postagem e divulgação ocupa horas dos sócios. <strong>Trabalho que vocês descreveram como "o que o Astrea faria"</strong> — repetitivo, operacional, baixo valor agregado por hora.</div>
+    </div>
+
+    <div class="sint-cell">
+      <div class="s-label">— INVESTIMENTO ATIVO</div>
+      <div class="s-title">Verba já alocada em Meta Ads</div>
+      <div class="s-desc">Há investimento contínuo em anúncios pagos, e <strong>contratação de profissional de tráfego pago em curso</strong>. O escritório já decidiu que mídia paga é parte da estratégia.</div>
+    </div>
+
+    <div class="sint-cell">
+      <div class="s-label">— ESTADO ATUAL DAS REDES</div>
+      <div class="s-title">Instagram ativo, mas esporádico</div>
+      <div class="s-desc">Posts em frequência baixa, formato predominante: <strong>vídeos do Henrique falando, stories in loco do escritório</strong>. Sem cadência fixa, sem identidade visual padronizada.</div>
+    </div>
+  </div>
+
+  <div class="sint-quote">
+    "A gente sabe que precisa postar mais. O problema é que sempre cai pra <span class="em">depois</span>."
+    <span class="attr">— Espírito do briefing, na nossa leitura</span>
+  </div>
+
+  <div class="folio">III · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 4 — DIAGNÓSTICO TÉCNICO (5 EIXOS DE GAP)
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">III · DIAGNÓSTICO</span>
+    <span class="right">Cinco eixos de gap mapeados</span>
+  </div>
+
+  <h2 class="dx-h2">Os cinco pontos onde o sistema <span class="em">trava</span> hoje.</h2>
+  <p class="lead dx-lead">Cada eixo abaixo foi avaliado em uma escala de gravidade simples — quanto mais o gap drena resultado por mês, mais alta a nota. Notas altas não significam crítica ao escritório; significam que existe ganho mensurável a ser destravado.</p>
+
+  <div class="dx-list">
+    <div class="dx-row">
+      <div class="d-num">01</div>
+      <div class="d-body">
+        <div class="d-title">Cadência editorial inconsistente</div>
+        <div class="d-text">Posts esporádicos sinalizam ao algoritmo do Instagram baixa prioridade de exibição. <strong>Cada interrupção custa alcance acumulado</strong>, e cada retomada parte de uma base menor que a anterior. Conteúdo em pulso, não em fluxo.</div>
+      </div>
+      <div class="d-grav">
+        <div class="gv-label">— Gravidade</div>
+        <div class="gv-value">Alta</div>
+      </div>
+    </div>
+
+    <div class="dx-row">
+      <div class="d-num">02</div>
+      <div class="d-body">
+        <div class="d-title">Produção dependente do tempo dos sócios</div>
+        <div class="d-text">O formato dominante (vídeos do Henrique falando) <strong>amarra a produção à agenda de um sócio operando</strong>. Sócio gravando vídeo é uma das horas mais caras do escritório — e a única que não pode ser delegada nesse modelo.</div>
+      </div>
+      <div class="d-grav">
+        <div class="gv-label">— Gravidade</div>
+        <div class="gv-value">Alta</div>
+      </div>
+    </div>
+
+    <div class="dx-row">
+      <div class="d-num">03</div>
+      <div class="d-body">
+        <div class="d-title">Ausência de identidade visual coerente</div>
+        <div class="d-text">Stories in loco e vídeos casuais constroem autenticidade — mas <strong>não constroem autoridade</strong>. Para direito médico, onde o cliente final tende a ser educado e exigente, falta uma camada visual que sinalize seriedade técnica: tipografia, paleta, padrão.</div>
+      </div>
+      <div class="d-grav">
+        <div class="gv-label">— Gravidade</div>
+        <div class="gv-value">Média</div>
+      </div>
+    </div>
+
+    <div class="dx-row">
+      <div class="d-num">04</div>
+      <div class="d-body">
+        <div class="d-title">Sem mapa editorial entre as três áreas</div>
+        <div class="d-text">Direito civil, médico e empresarial são públicos diferentes. <strong>Postar tudo no mesmo feed sem segmentação</strong> dilui o sinal — quem busca direito médico recebe peças genéricas e quem busca empresarial vê conteúdo desalinhado. O esforço de nichar em direito médico fica invisível.</div>
+      </div>
+      <div class="d-grav">
+        <div class="gv-label">— Gravidade</div>
+        <div class="gv-value">Alta</div>
+      </div>
+    </div>
+
+    <div class="dx-row">
+      <div class="d-num">05</div>
+      <div class="d-body">
+        <div class="d-title">Ausência de pipeline entre briefing e post</div>
+        <div class="d-text">Hoje, ter uma ideia de post e ter o post publicado são separados por <strong>horas de trabalho manual</strong>: pensar copy, pensar arte, montar visual, revisar, postar. Sem um sistema, cada peça é um projeto novo — e projetos novos são o que cai pra "depois".</div>
+      </div>
+      <div class="d-grav">
+        <div class="gv-label">— Gravidade</div>
+        <div class="gv-value">Crítica</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="folio">IV · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 5 — RISCO ESPECÍFICO (ADS X ORGÂNICO)
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">IV · RISCO CRÍTICO</span>
+    <span class="right">O custo de não tratar agora</span>
+  </div>
+
+  <h2 class="rc-h2">Tráfego pago amplifica o que <span class="em">já existe</span> — bom ou ruim.</h2>
+  <p class="lead rc-lead">O risco mais imediato do escritório não é estar fora das redes. É estar nas redes investindo em mídia paga enquanto o conteúdo orgânico que sustenta a marca permanece frágil. Anúncio leva o usuário ao perfil — e é o perfil que decide se ele fica.</p>
+
+  <div class="rc-flow">
+    <div class="rc-box">
+      <div class="rc-label">— SITUAÇÃO ATUAL</div>
+      <div class="rc-title">Anúncio empurra tráfego</div>
+      <div class="rc-desc">Verba mensal em Meta Ads + profissional de tráfego pago em contratação. O escritório paga por cliques e impressões para alcançar mais pessoas.</div>
+    </div>
+    <div class="rc-arrow">→</div>
+    <div class="rc-box bad">
+      <div class="rc-label">— ATERRISSAGEM</div>
+      <div class="rc-title">Perfil com cadência fraca recebe a visita</div>
+      <div class="rc-desc">Lead curioso clica no anúncio, acessa o Instagram, encontra poucos posts, sem identidade clara, sem volume recente. Conclusão: "não passou autoridade." Sai.</div>
+    </div>
+  </div>
+
+  <div class="rc-conclusion">
+    <div class="rc-c-label">— Por que isso é crítico</div>
+    <div class="rc-c-text">
+      Em tráfego pago, o <strong>custo por aquisição</strong> de cliente é inversamente proporcional à robustez do perfil que recebe a visita. Cada R$ investido em anúncio que aterrissa num perfil frágil <strong>compra metade do resultado</strong> que compraria num perfil sólido. O escritório está hoje pagando para queimar parte do próprio orçamento de mídia. <span class="em">Não por escolha — por sequência errada de prioridades.</span>
+    </div>
+  </div>
+
+  <div class="folio">V · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 6 — PIVÔ DIREITO MÉDICO
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">V · POSICIONAMENTO</span>
+    <span class="right">O foco em direito médico</span>
+  </div>
+
+  <h2 class="pv-h2">A escolha pelo <span class="em">direito médico</span> exige conteúdo diferente.</h2>
+  <p class="lead pv-lead">Direito médico é um dos nichos de maior ticket e maior exigência reputacional do Brasil. A persona-alvo costuma ser médico (cliente B2C) ou clínica/hospital (cliente B2B) — públicos sofisticados, que avaliam o escritório pelo conteúdo antes de marcar a primeira consulta.</p>
+
+  <div class="pv-stats">
+    <div class="ps-cell">
+      <div class="ps-value">B2C+B2B</div>
+      <div class="ps-label">Persona dupla: médico individual<br>e clínica/hospital</div>
+    </div>
+    <div class="ps-cell">
+      <div class="ps-value">Alto</div>
+      <div class="ps-label">Ticket médio do contrato<br>jurídico desse nicho</div>
+    </div>
+    <div class="ps-cell">
+      <div class="ps-value">Vertical</div>
+      <div class="ps-label">Decisão por autoridade,<br>não por preço</div>
+    </div>
+  </div>
+
+  <div class="pv-cards">
+    <div class="pv-card">
+      <div class="pc-label">— O QUE O NICHO PEDE</div>
+      <div class="pc-title">Linguagem técnica e contextual</div>
+      <div class="pc-desc">Médicos respondem mal a conteúdo jurídico genérico. Precisam ver <strong>termos do dia a dia clínico</strong> (CRM, responsabilidade civil em ato médico, judicialização da saúde, telemedicina) abordados com domínio.</div>
+    </div>
+    <div class="pv-card">
+      <div class="pc-label">— O QUE O NICHO PUNE</div>
+      <div class="pc-title">Genérico e inconsistente</div>
+      <div class="pc-desc">Posts soltos sobre "direito do trabalho", "família" e "empresarial" no mesmo feed sinalizam que o escritório <strong>ainda não decidiu o que é</strong>. Persona médica passa adiante.</div>
+    </div>
+    <div class="pv-card">
+      <div class="pc-label">— A OPORTUNIDADE</div>
+      <div class="pc-title">Vácuo competitivo em BH</div>
+      <div class="pc-desc">Poucos escritórios em Belo Horizonte construíram autoridade pública específica em direito médico. <strong>Quem chegar primeiro com cadência e identidade</strong> ocupa o espaço antes da concorrência reagir.</div>
+    </div>
+    <div class="pv-card">
+      <div class="pc-label">— O CUSTO DE NÃO PIVOTAR AGORA</div>
+      <div class="pc-title">Posicionamento se solidifica</div>
+      <div class="pc-desc">A cada mês postando misturado, o feed reforça a percepção de "escritório generalista". <strong>Reposicionar depois é mais caro do que posicionar agora</strong>, com o feed ainda enxuto.</div>
+    </div>
+  </div>
+
+  <p class="pv-conclusion">
+    O sistema de conteúdo precisa, no mínimo, <span class="em">separar trilhas</span> entre direito médico (vitrine) e demais áreas (sustento) — e tratar a primeira com a sofisticação visual e técnica que a persona exige.
+  </p>
+
+  <div class="folio">VI · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 7 — PRESCRIÇÃO (GAP → FIX → KPI)
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VI · PRESCRIÇÃO</span>
+    <span class="right">O sistema que resolve cada gap</span>
+  </div>
+
+  <h2 class="px-h2">Do diagnóstico ao <span class="em">tratamento</span>, mapa direto.</h2>
+  <p class="lead px-lead">A cada eixo de gap, um componente do sistema TimeLabs responde com solução específica. Tudo abaixo já existe construído e testado — o que falta é a calibração para o escritório.</p>
+
+  <table class="px-table">
+    <thead>
+      <tr>
+        <th>Gap diagnosticado</th>
+        <th>O que o sistema faz</th>
+        <th>KPI alvo</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="gap">Cadência inconsistente</td>
+        <td class="fix">Pipeline de geração entrega <strong>até 20 campanhas/mês</strong> em volume estável, com agendamento pelo calendário editorial. Cadência deixa de depender de inspiração.</td>
+        <td class="kpi">Posts /mês<br>↑ 4x</td>
+      </tr>
+      <tr>
+        <td class="gap">Tempo dos sócios drenado</td>
+        <td class="fix">Henrique aprova em <strong>3 a 5 minutos por campanha</strong>, sem precisar criar do zero. Tempo de sócio passa de criador para curador.</td>
+        <td class="kpi">Tempo /post<br>↓ 80%</td>
+      </tr>
+      <tr>
+        <td class="gap">Sem identidade visual coerente</td>
+        <td class="fix">Template tipográfico fixo (navy &amp; gold, fontes embarcadas) com <strong>tipografia renderizada por código</strong> — zero erro, identidade idêntica em todo post.</td>
+        <td class="kpi">Padronização<br>100%</td>
+      </tr>
+      <tr>
+        <td class="gap">Sem mapa editorial entre áreas</td>
+        <td class="fix">Briefing classifica cada campanha por área (médico, civil, empresarial). <strong>Templates podem ser segmentados</strong> e o feed do nicho prioritário recebe peso maior.</td>
+        <td class="kpi">Foco médico<br>≥ 60%</td>
+      </tr>
+      <tr>
+        <td class="gap">Sem pipeline briefing→post</td>
+        <td class="fix">Sete campos de briefing geram <strong>3 variações por campanha</strong> (autoridade, dor, educativo) em menos de 2 minutos. Da ideia ao PNG pronto: minutos, não horas.</td>
+        <td class="kpi">Tempo de ciclo<br>&lt; 2 min</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="px-foot">
+    Cada KPI acima é <span class="em">verificável</span> no painel do sistema — não é estimativa, é log.
+  </p>
+
+  <div class="folio">VII · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 8 — MÉTRICAS DE SUCESSO (90 DIAS)
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VII · MÉTRICAS</span>
+    <span class="right">O que mudamos em 90 dias</span>
+  </div>
+
+  <h2 class="kp-h2">Quatro <span class="em">indicadores</span> verificáveis até o terceiro mês.</h2>
+  <p class="lead kp-lead">Métricas escolhidas para ser auditáveis a partir do próprio Instagram e do painel TimeLabs — sem depender de relatório de agência ou interpretação subjetiva. Cada linha abaixo se mede sozinha.</p>
+
+  <div class="kp-grid">
+    <div class="kp-cell">
+      <div class="k-label">— FREQUÊNCIA DE PUBLICAÇÃO</div>
+      <div class="k-from-to">
+        <span class="k-from">esporádico</span>
+        <span class="k-arrow">→</span>
+        <span class="k-to">≥ 4 posts /sem</span>
+      </div>
+      <div class="k-desc">Cadência fixa, sustentável, sem depender da agenda dos sócios. <strong>Algoritmo passa a tratar o perfil como ativo regular.</strong></div>
+    </div>
+
+    <div class="kp-cell">
+      <div class="k-label">— TEMPO POR POST DO HENRIQUE</div>
+      <div class="k-from-to">
+        <span class="k-from">≈ 1h</span>
+        <span class="k-arrow">→</span>
+        <span class="k-to">&lt; 5 min</span>
+      </div>
+      <div class="k-desc">De criador para aprovador. <strong>O sócio devolve tempo para a operação jurídica</strong> — onde o ticket-hora é maior.</div>
+    </div>
+
+    <div class="kp-cell">
+      <div class="k-label">— IDENTIDADE VISUAL CONSISTENTE</div>
+      <div class="k-from-to">
+        <span class="k-from">variável</span>
+        <span class="k-arrow">→</span>
+        <span class="k-to">100% padrão</span>
+      </div>
+      <div class="k-desc">Tipografia, paleta e dimensões idênticas em todo post. <strong>O feed passa a parecer escritório, não conta pessoal.</strong></div>
+    </div>
+
+    <div class="kp-cell">
+      <div class="k-label">— FOCO EM DIREITO MÉDICO</div>
+      <div class="k-from-to">
+        <span class="k-from">misto</span>
+        <span class="k-arrow">→</span>
+        <span class="k-to">≥ 60% médico</span>
+      </div>
+      <div class="k-desc">Maior parte do feed dedicada ao nicho prioritário. <strong>Posicionamento se torna legível</strong> para qualquer visitante novo em menos de 10 segundos.</div>
+    </div>
+  </div>
+
+  <p class="kp-foot">
+    Nenhuma das métricas acima depende de orçamento de mídia paga — todas se entregam <span class="em">pelo orgânico</span>, com o sistema instalado.
+  </p>
+
+  <div class="folio">VIII · IX</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 9 — CTA / PRÓXIMO PASSO
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VIII · PRÓXIMO PASSO</span>
+    <span class="right">O compromisso já está em curso</span>
+  </div>
+
+  <div class="cta-main">
+    <h2>O diagnóstico está fechado.<br>A <span class="em">demonstração</span> mostra a prescrição funcionando.</h2>
+    <p class="subtitle">Sete dias do briefing ao documento. Duas semanas ao sistema rodando.</p>
+
+    <div class="cta-box">
+      <div class="cta-label">— PRÓXIMO MARCO —</div>
+      <div class="cta-text">Demo · 28 de maio de 2026</div>
+      <div class="cta-note">Sistema gerando ao vivo · Mendes &amp; Vaz</div>
+    </div>
+  </div>
+
+  <div class="contact-strip">
+    <div class="contact-item">
+      <div class="label">— Documento</div>
+      <div class="value">Diagnóstico v1</div>
+    </div>
+    <div class="contact-item">
+      <div class="label">— Por</div>
+      <div class="value">TimeLabs · Enzo Ferraz</div>
+    </div>
+    <div class="contact-item">
+      <div class="label">— Entrega</div>
+      <div class="value">25.05.2026</div>
+    </div>
+  </div>
+
+  <div class="colofao">
+    <span>TIMELABS · MMXXVI</span>
+    <span class="center">DIAGNÓSTICO · MENDES &amp; VAZ</span>
+    <span>IX · IX</span>
+  </div>
+</section>
+
+</body>
+</html>
