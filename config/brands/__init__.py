@@ -38,6 +38,13 @@ class Brand:
     # Exportação
     approved_by: str               # Nome de quem aprova (vai no metadata)
 
+    # Prompts do LLM (copy generator) — Fase B.2
+    # System prompt usado em posts simples (square / portrait / story) e em
+    # carrossel (variante com slides). Cada brand define seu tom, identidade
+    # e regras específicas (advocacia vs DJ vs ...).
+    system_prompt: str
+    system_prompt_carousel: str
+
 
 def load(slug: str) -> Brand:
     """
