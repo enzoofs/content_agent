@@ -47,6 +47,7 @@ POST_SIZES = {
     "square": (1080, 1080),      # Feed Instagram, LinkedIn
     "portrait": (1080, 1350),    # Feed Instagram (maior alcance)
     "carousel": (1080, 1080),    # Slides de carrossel
+    "story": (1080, 1920),       # Stories Instagram (9:16, full-screen)
 }
 
 # Mapeia formato -> template HTML usado pelo composer
@@ -54,6 +55,7 @@ TEMPLATE_BY_FORMAT = {
     "square": "post_square.html",
     "portrait": "post_portrait.html",
     "carousel": "carousel_slide.html",
+    "story": "story.html",
 }
 
 # --------------------------------------------------------------------------
@@ -129,6 +131,7 @@ IDEOGRAM_RESOLUTIONS = {
     "square": "RESOLUTION_1024_1024",
     "portrait": "RESOLUTION_1024_1280",
     "carousel": "RESOLUTION_1024_1024",
+    "story": "RESOLUTION_720_1280",   # 9:16 nativo na V_2; composer faz upscale pra 1080x1920
 }
 
 # Sufixo anexado ao image_prompt — estética DELIBERADAMENTE acessível:

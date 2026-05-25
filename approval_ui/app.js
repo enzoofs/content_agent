@@ -171,6 +171,7 @@ function renderNovo() {
           <select name="formato" id="sel-formato">
             <option value="square">Square (1080×1080)</option>
             <option value="portrait">Portrait (1080×1350)</option>
+            <option value="story">Story (1080×1920)</option>
             <option value="carousel">Carrossel</option>
           </select>
         </label>

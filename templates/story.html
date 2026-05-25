@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<!-- story.html — Instagram Story 1080×1920 (9:16).
+     Respeita safe-area da UI do Instagram: topo (~220px header) e
+     base (~280px barra de mensagem/stickers) ficam livres do conteúdo
+     principal. Mesmas variáveis do post_square.html. -->
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face {
+    font-family: 'Playfair Display';
+    font-style: normal;
+    font-weight: 700;
+    src: url('$font_playfair_700') format('woff2');
+  }
+  @font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 400;
+    src: url('$font_montserrat_400') format('woff2');
+  }
+  @font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 600;
+    src: url('$font_montserrat_600') format('woff2');
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: ${width}px;
+    height: ${height}px;
+    overflow: hidden;
+    position: relative;
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  .bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('$background_image');
+    background-size: cover;
+    background-position: center;
+  }
+
+  /* Gradient mais intenso na base (área do CTA) e suave no topo,
+     pra contraste de leitura sobre qualquer foto. */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(26, 32, 56, 0.96) 0%,
+      rgba(26, 32, 56, 0.78) 35%,
+      rgba(26, 32, 56, 0.30) 70%,
+      rgba(26, 32, 56, 0.55) 100%
+    );
+  }
+
+  /* Safe area Instagram: 220px topo, 280px base.
+     Conteúdo principal ocupa o centro vertical. */
+  .content {
+    position: absolute;
+    top: 240px;
+    bottom: 320px;
+    left: 80px;
+    right: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .gold-rule {
+    width: 72px;
+    height: 4px;
+    background: $gold;
+    margin-bottom: 36px;
+  }
+
+  .headline {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 84px;
+    line-height: 1.08;
+    color: #FFFFFF;
+    margin-bottom: 28px;
+    letter-spacing: -0.8px;
+  }
+
+  .subheadline {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 22px;
+    color: rgba(255,255,255,0.82);
+    margin-bottom: 30px;
+    text-transform: uppercase;
+    letter-spacing: 2.4px;
+  }
+
+  .body-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 400;
+    font-size: 26px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 44px;
+    max-width: 90%;
+  }
+
+  /* CTA fica acima da safe-area inferior, com destaque visual. */
+  .cta {
+    position: absolute;
+    left: 80px;
+    bottom: 200px;
+    display: inline-block;
+    padding: 18px 36px;
+    background: transparent;
+    border: 2px solid $gold;
+    color: $gold;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+  }
+
+  .logo {
+    position: absolute;
+    top: 110px;
+    left: 80px;
+    height: 72px;
+    width: auto;
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="overlay"></div>
+  <img class="logo" src="$logo" alt="Mendes & Vaz">
+  <div class="content">
+    <div class="gold-rule"></div>
+    <h1 class="headline">$headline</h1>
+    $subheadline_html
+    <p class="body-text">$body_text</p>
+  </div>
+  <div class="cta">$cta_text</div>
+</body>
+</html>

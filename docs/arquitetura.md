@@ -1,7 +1,12 @@
 # Arquitetura — Mendes & Vaz Social
 
 > Documento vivo. Objetivo: alguém novo entender o sistema em 15 min.
-> Última atualização: 2026-05-24.
+> Última atualização: 2026-05-25.
+>
+> **Contexto atual:** sistema desenhado pra 1 cliente (Mendes & Vaz). Em
+> transição pra multi-marca (Gui DJ entrando como cliente #2). A arquitetura
+> abaixo descreve o estado atual; o que muda na expansão está em
+> `docs/fase-2-roadmap.md` (especialmente item 5.7 — brand config dinâmico).
 
 ---
 

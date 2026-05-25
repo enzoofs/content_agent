@@ -57,14 +57,14 @@ BRIEFING_SCHEMA: dict[str, type] = {
     "tom": str,                    # "tecnico" | "acessivel"
     "objetivo": str,               # "awareness" | "captacao" | "posicionamento"
     "tema_especifico": str,        # pode ser ""
-    "formato": str,                # "square" | "portrait" | "carousel"
+    "formato": str,                # "square" | "portrait" | "carousel" | "story"
     "num_slides": int,             # 1 para simples; 3-8 para carrossel
     "referencias": str,            # pode ser ""
 }
 
 TONS_VALIDOS = {"tecnico", "acessivel"}
 OBJETIVOS_VALIDOS = {"awareness", "captacao", "posicionamento"}
-FORMATOS_VALIDOS = {"square", "portrait", "carousel"}
+FORMATOS_VALIDOS = {"square", "portrait", "carousel", "story"}
 
 # Limite de caracteres por campo livre — evita custo/erro com texto gigante no
 # prompt da OpenAI e protege a UI de payloads absurdos.

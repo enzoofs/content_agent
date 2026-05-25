@@ -193,6 +193,28 @@ Coisas pequenas que **destravam tudo o resto** e devem ser feitas antes:
 
 **Por que importa:** publicação automática é o que justifica preço de SaaS (vs uma rodada de Canva).
 
+### 5.6 Contagem de tokens / custo de IA por cliente
+- [ ] Capturar `response.usage` (prompt/completion tokens) em `copy_generator.generate`
+- [ ] Contabilizar imagens geradas pelo Ideogram (cobrança por imagem, não por token)
+- [ ] Persistir uso por campanha (tabela `usage_events` com tenant_id, campaign_id, modelo, tokens_in, tokens_out, custo_usd, timestamp)
+- [ ] UI: badge "Esta geração custou X tokens (~$Y)" na tela de progresso e aprovação
+- [ ] UI: card no dashboard com total mensal do cliente + quota restante (analogo às quotas atuais)
+- [ ] `settings.py`: `TOKEN_BUDGET_MES` por plano (essencial/profissional) → integrar com `modules/quotas.py`
+- [ ] Bloqueio soft (warn 70%) e hard (100%) quando estourar budget de tokens
+
+**Por que importa:** dá transparência de custo pro cliente (vende a percepção de valor) e protege a margem (cliente sabe quanto sobrou antes de gerar lote grande).
+
+### 5.7 Ferramentas de design — personalização visual do cliente
+- [ ] Tela "Identidade visual" no painel do cliente (atualmente paleta é hardcoded em `settings.COLORS`)
+- [ ] Editor de paleta: cliente escolhe cores primária/secundária/fundo (color picker + preview)
+- [ ] Upload de logo próprio (substitui `logo_mendes_vaz.png` por cliente)
+- [ ] Seleção de fontes (pool curado de 6-8 combinações Google Fonts — não font livre, evita caos visual)
+- [ ] Persistir em `tenants.brand_config` (JSON com colors/fonts/logo_path)
+- [ ] Templates HTML lêem `brand_config` em vez de `settings.COLORS` / `settings.FONTS`
+- [ ] Preview ao vivo: gera mock 1080x1080 sem rodar pipeline real
+
+**Por que importa:** destrava venda pra escritórios com identidade visual própria (hoje só serve Mendes & Vaz). Cada novo cliente vira "setup de 10 min" em vez de "fork do código".
+
 ---
 
 ## Ordem de execução sugerida
