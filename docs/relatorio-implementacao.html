@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>TimeLabs — Relatório de Implementação · Mendes & Vaz Social · MMXXVI</title>
+<meta name="description" content="Relatório técnico de implementação do MVP Mendes & Vaz Social — TimeLabs">
+<style>
+  /* ============================================================
+     FONTES — self-hosted
+     ============================================================ */
+  @font-face { font-family: 'Gloock'; src: url('fonts/Gloock-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; font-style: italic; src: url('fonts/InstrumentSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; src: url('fonts/InstrumentSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; src: url('fonts/IBMPlexSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-weight: 700; src: url('fonts/IBMPlexSerif-Bold.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-style: italic; src: url('fonts/IBMPlexSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; src: url('fonts/IBMPlexMono-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; font-weight: 700; src: url('fonts/IBMPlexMono-Bold.ttf') format('truetype'); font-display: swap; }
+
+  :root {
+    --paper:      #EFE9DA;
+    --paper-alt:  #FAF8F2;
+    --paper-deep: #E6DFC9;
+    --ink:        #2B2520;
+    --ink-soft:   #6B6258;
+    --ink-faint:  rgba(43,37,32,0.55);
+    --mercury:    #B8902E;     /* mais escuro/legível em fundo claro */
+    --mercury-bright: #E0B03A; /* tom original para acentos pequenos */
+    --rule:       rgba(43,37,32,0.18);
+    --rule-light: rgba(43,37,32,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ============================================================
+     A4 RETRATO em TODAS as páginas — uniforme.
+     Margens seguras: 24mm top/bottom para folio + section-head.
+     ============================================================ */
+  @page { size: A4 portrait; margin: 0; }
+
+  html, body {
+    background: #1a1714;
+    color: var(--ink);
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    background: var(--paper);
+    margin: 0 auto;
+    padding: 26mm 22mm 24mm;        /* margens consistentes em TODAS as páginas */
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-child { page-break-after: avoid; }
+
+  @media screen {
+    body { padding: 32px 0; }
+    .page {
+      margin-bottom: 32px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 6px 20px rgba(0,0,0,0.35);
+    }
+  }
+
+  /* Hex background */
+  .hex-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+  .hex-bg svg { width: 100%; height: 100%; display: block; }
+  .page > *:not(.hex-bg) { position: relative; z-index: 1; }
+
+  /* Reg marks (printer crosshairs) */
+  .reg-mark {
+    position: absolute; width: 12px; height: 12px; opacity: 0.32;
+  }
+  .reg-mark::before, .reg-mark::after {
+    content: ""; position: absolute; background: var(--ink-soft);
+  }
+  .reg-mark::before { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+  .reg-mark::after  { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+  .reg-tl { top: 8mm; left: 8mm; }
+  .reg-tr { top: 8mm; right: 8mm; }
+  .reg-bl { bottom: 8mm; left: 8mm; }
+  .reg-br { bottom: 8mm; right: 8mm; }
+
+  /* Typography utilities */
+  .font-display { font-family: 'Gloock', Georgia, serif; }
+  .font-italic  { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; }
+  .font-mono    { font-family: 'IBM Plex Mono', monospace; }
+  .text-mercury { color: var(--mercury); }
+  .text-soft    { color: var(--ink-soft); }
+  .em { color: var(--mercury); font-style: italic; }
+
+  /* Folio (page number) — bottom center, safe margin */
+  .folio {
+    position: absolute;
+    bottom: 14mm;
+    left: 50%; transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 4px;
+    color: var(--ink-soft); opacity: 0.65; text-transform: uppercase;
+    z-index: 2;
+  }
+
+  /* Section heads — top of content area */
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 12mm;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule-light);
+  }
+  .section-head .left {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 4px;
+    color: var(--mercury); text-transform: uppercase;
+  }
+  .section-head .right {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft); text-transform: uppercase; opacity: 0.75;
+  }
+
+  /* Common heading H2 */
+  h2 {
+    font-family: 'Gloock', serif;
+    font-weight: normal;
+    line-height: 1.12;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+  h2 .em { color: var(--mercury); font-style: normal; }
+
+  /* Lead paragraph (intro) */
+  .lead {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 10.5pt;
+    line-height: 1.65;
+    color: var(--ink-soft);
+  }
+
+  /* ============================================================
+     PAGE 1 — CAPA
+     ============================================================ */
+  .page-capa {
+    align-items: center;
+    justify-content: space-between;
+    padding: 30mm 22mm;
+  }
+  .capa-top {
+    width: 100%;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .capa-top .label-block {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft); text-transform: uppercase;
+    line-height: 1.9; opacity: 0.78;
+  }
+  .capa-top .label-block .v { color: var(--ink); opacity: 1; }
+  .capa-top .right { text-align: right; }
+
+  .capa-center {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    width: 100%; padding: 0 8mm;
+  }
+  .capa-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 7px;
+    color: var(--ink-soft); text-transform: uppercase;
+    margin-bottom: 28px; opacity: 0.85;
+  }
+  .capa-titulo {
+    font-family: 'Gloock', serif;
+    font-size: 48pt;
+    line-height: 1.05;
+    text-align: center;
+    color: var(--ink);
+    letter-spacing: -1.2px;
+    max-width: 14ch;
+  }
+  .capa-titulo .em { color: var(--mercury); }
+  .capa-tagline {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 17pt; color: var(--ink-soft);
+    text-align: center; margin-top: 22px; letter-spacing: 0.3px;
+    max-width: 38ch; line-height: 1.35;
+  }
+  .capa-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 5px;
+    color: var(--ink-soft); text-transform: uppercase;
+    margin-top: 16px;
+  }
+
+  .capa-bottom {
+    width: 100%;
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .capa-bottom .field-label { opacity: 0.6; margin-bottom: 5px; display: block; }
+  .capa-bottom .field-value {
+    color: var(--ink); font-size: 9.5pt; letter-spacing: 1px;
+    font-family: 'IBM Plex Serif', serif; text-transform: none;
+  }
+
+  /* ============================================================
+     PAGE 2 — TESE
+     ============================================================ */
+  .tese-quote {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 28pt; line-height: 1.22;
+    color: var(--ink); letter-spacing: 0.3px;
+    max-width: 22ch;
+    margin-bottom: 16mm;
+  }
+  .tese-quote .em { color: var(--mercury); font-style: italic; }
+
+  .tese-body {
+    display: grid; grid-template-columns: 40px 1fr; gap: 24px;
+    align-items: start;
+    margin-bottom: 14mm;
+  }
+  .tese-body .gold-stripe {
+    width: 2px; height: 100%;
+    background: var(--mercury); opacity: 0.85;
+    margin-left: 16px;
+    min-height: 80mm;
+  }
+  .tese-body p {
+    font-size: 11.5pt; line-height: 1.75;
+    color: var(--ink); max-width: 56ch;
+  }
+  .tese-body p + p { margin-top: 12px; color: var(--ink-soft); }
+
+  .tese-signed {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .tese-signed .name {
+    color: var(--ink); font-family: 'Gloock', serif;
+    font-size: 14pt; letter-spacing: 0.5px;
+    text-transform: none;
+  }
+
+  /* ============================================================
+     PAGE 3 — SISTEMA + ESCOPO
+     ============================================================ */
+  .escopo-h2 {
+    font-size: 26pt; max-width: 16ch; margin-bottom: 10px;
+  }
+  .escopo-lead { max-width: 60ch; margin-bottom: 12mm; }
+
+  .escopo-stats {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px;
+    padding: 14px 0 16px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 12mm;
+  }
+  .escopo-stats .stat-number {
+    font-family: 'Gloock', serif; font-size: 36pt;
+    color: var(--mercury); line-height: 1; letter-spacing: -1px;
+  }
+  .escopo-stats .stat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 1.5px;
+    color: var(--ink-soft); margin-top: 10px;
+    text-transform: uppercase; line-height: 1.55;
+  }
+
+  .pipeline-block {
+    flex: 1;
+  }
+  .pipeline-block .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 3.5px; text-transform: uppercase;
+    color: var(--mercury); margin-bottom: 14px;
+  }
+  .pipeline-flow { list-style: none; }
+  .pipeline-flow li {
+    display: flex; align-items: baseline; gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--rule-light);
+  }
+  .pipeline-flow li:last-child { border-bottom: none; }
+  .pipeline-flow li .step-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; color: var(--mercury);
+    letter-spacing: 1px; min-width: 28px;
+  }
+  .pipeline-flow li .step-name {
+    font-family: 'Gloock', serif; font-size: 14pt;
+    color: var(--ink); letter-spacing: -0.2px;
+  }
+  .pipeline-flow li .step-tech {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; color: var(--ink-faint);
+    letter-spacing: 1.5px; margin-left: auto;
+    text-transform: uppercase;
+  }
+
+  /* ============================================================
+     PAGE 4 — COMPONENTES (12 cards, 3 colunas × 4 linhas)
+     ============================================================ */
+  .ent-intro {
+    margin-bottom: 7mm;
+  }
+  .ent-h2 {
+    font-size: 22pt; max-width: 18ch; margin-bottom: 6px;
+  }
+  .ent-lead { max-width: 62ch; font-size: 10pt; line-height: 1.55; }
+
+  .ent-cards {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-auto-rows: 1fr;
+    gap: 7px;
+  }
+  .ent-card {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 8px 10px 7px;
+    position: relative;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .ent-card::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 18px; height: 2px;
+    background: var(--mercury);
+  }
+  .ent-card .card-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 6.5pt; letter-spacing: 1.8px;
+    color: var(--mercury); margin-bottom: 2px;
+  }
+  .ent-card .card-name {
+    font-family: 'Gloock', serif; font-size: 10pt;
+    line-height: 1.12; margin-bottom: 3px; letter-spacing: -0.2px;
+    color: var(--ink);
+  }
+  .ent-card .card-desc {
+    font-size: 7.5pt; color: var(--ink-soft);
+    line-height: 1.4; flex: 1;
+  }
+  .ent-card .card-tech {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 6pt; letter-spacing: 1px;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin-top: 4px; padding-top: 4px;
+    border-top: 1px dashed var(--rule-light);
+  }
+
+  /* ============================================================
+     PAGE 5 — DECISÕES TÉCNICAS
+     ============================================================ */
+  .dec-intro { margin-bottom: 10mm; }
+  .dec-h2 {
+    font-size: 26pt; max-width: 16ch; margin-bottom: 8px;
+  }
+  .dec-lead { max-width: 60ch; }
+
+  .dec-list {
+    flex: 1;
+    display: flex; flex-direction: column;
+    border-top: 1px solid var(--rule-light);
+  }
+  .dec-row {
+    display: grid;
+    grid-template-columns: 28px 1.1fr 2fr;
+    gap: 18px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule-light);
+    align-items: baseline;
+  }
+  .dec-row .d-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; color: var(--mercury);
+    letter-spacing: 1.5px;
+  }
+  .dec-row .d-titulo {
+    font-family: 'Gloock', serif; font-size: 12pt;
+    line-height: 1.22; letter-spacing: -0.2px; color: var(--ink);
+  }
+  .dec-row .d-justifica {
+    font-size: 9.5pt; line-height: 1.55;
+    color: var(--ink-soft);
+  }
+  .dec-row .d-justifica .em { color: var(--mercury); font-style: italic; }
+
+  /* ============================================================
+     PAGE 6 — MATURIDADE (claro)
+     ============================================================ */
+  .matur-hero {
+    display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px;
+    align-items: stretch;
+    margin-bottom: 12mm;
+  }
+  .matur-hero-left h2 {
+    font-size: 26pt; max-width: 14ch; margin-bottom: 12px;
+  }
+  .matur-hero-left .lead { max-width: 50ch; }
+
+  .score-block {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    border-left: 3px solid var(--mercury);
+    padding: 18px 22px;
+    text-align: center;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .score-block .score-now {
+    font-family: 'Gloock', serif; font-size: 56pt;
+    color: var(--mercury); line-height: 1; letter-spacing: -2px;
+  }
+  .score-block .score-now .sub {
+    font-size: 22pt; color: var(--ink-soft); letter-spacing: -1px;
+  }
+  .score-block .score-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft);
+    margin-top: 8px; text-transform: uppercase;
+  }
+  .score-block .score-from {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2px;
+    color: var(--ink-faint);
+    margin-top: 12px; padding-top: 9px;
+    border-top: 1px solid var(--rule-light);
+    text-transform: uppercase;
+  }
+
+  .matur-grid {
+    flex: 1;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    align-content: start;
+  }
+  .matur-cell {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 12px 14px;
+  }
+  .matur-cell .cell-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .matur-cell .cell-value {
+    font-family: 'Gloock', serif; font-size: 19pt;
+    color: var(--ink); letter-spacing: -0.5px; line-height: 1;
+  }
+  .matur-cell .cell-desc {
+    font-size: 9pt; color: var(--ink-soft);
+    margin-top: 8px; line-height: 1.5;
+  }
+
+  /* ============================================================
+     PAGE 7 — ROADMAP FASE 2
+     ============================================================ */
+  .road-intro { margin-bottom: 10mm; }
+  .road-h2 {
+    font-size: 26pt; max-width: 18ch; margin-bottom: 8px;
+  }
+  .road-lead { max-width: 62ch; }
+
+  .road-blocks {
+    flex: 1;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    align-content: start;
+  }
+  .road-block {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 12px 14px 12px;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .road-block::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 22px; height: 2px;
+    background: var(--mercury);
+  }
+  .road-block .b-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2px;
+    color: var(--mercury); margin-bottom: 4px;
+  }
+  .road-block .b-name {
+    font-family: 'Gloock', serif; font-size: 12.5pt;
+    line-height: 1.15; margin-bottom: 4px;
+    letter-spacing: -0.2px; color: var(--ink);
+  }
+  .road-block .b-est {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7pt; letter-spacing: 1.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .road-block .b-list {
+    list-style: none; font-size: 9pt;
+    color: var(--ink-soft); line-height: 1.5;
+  }
+  .road-block .b-list li {
+    padding-left: 10px; position: relative;
+    margin-bottom: 2px;
+  }
+  .road-block .b-list li::before {
+    content: "·"; position: absolute; left: 0;
+    color: var(--mercury);
+  }
+
+  .road-numbers {
+    margin-top: 8mm; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 18px;
+  }
+  .rn-cell .rn-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7pt; letter-spacing: 2.5px;
+    color: var(--ink-faint); text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .rn-cell .rn-value {
+    font-family: 'Gloock', serif; font-size: 14pt;
+    color: var(--ink); letter-spacing: -0.5px; line-height: 1.1;
+  }
+  .rn-cell .rn-value .sub {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 9pt; color: var(--ink-soft);
+    letter-spacing: 0; margin-left: 3px;
+  }
+
+  /* ============================================================
+     PAGE 8 — WHATSAPP
+     ============================================================ */
+  .whats-intro { margin-bottom: 10mm; }
+  .whats-h2 {
+    font-size: 26pt; max-width: 16ch; margin-bottom: 8px;
+  }
+  .whats-lead { max-width: 62ch; }
+
+  .whats-flow {
+    flex: 1;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .whats-card {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 14px 16px;
+    position: relative;
+    display: grid; grid-template-columns: 0.95fr 2fr; gap: 22px;
+    align-items: start;
+  }
+  .whats-card::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 26px; height: 2px;
+    background: var(--mercury);
+  }
+  .whats-card .wleft .wn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2px;
+    color: var(--mercury); margin-bottom: 6px;
+  }
+  .whats-card .wleft .wt {
+    font-family: 'Gloock', serif; font-size: 14pt;
+    line-height: 1.15; margin-bottom: 4px; letter-spacing: -0.2px;
+    color: var(--ink);
+  }
+  .whats-card .wleft .ws {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 11pt; color: var(--mercury);
+  }
+  .whats-card .wright {
+    font-size: 9.5pt; color: var(--ink-soft); line-height: 1.55;
+  }
+  .whats-card .wright strong {
+    color: var(--ink); font-weight: 700;
+  }
+  .whats-card .wright .wbox {
+    margin-top: 8px; padding-top: 6px;
+    border-top: 1px dashed var(--rule-light);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7pt; letter-spacing: 1.5px;
+    color: var(--ink-faint); text-transform: uppercase;
+  }
+
+  .whats-foot {
+    margin-top: 10mm; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 12pt; color: var(--ink-soft);
+    text-align: center;
+    max-width: 70ch; margin-left: auto; margin-right: auto;
+  }
+  .whats-foot .em { color: var(--mercury); }
+
+  /* ============================================================
+     PAGE 9 — CAPTAÇÃO DE LEADS (dentro + fora das redes)
+     ============================================================ */
+  .lead-intro { margin-bottom: 8mm; }
+  .lead-h2 {
+    font-size: 24pt; max-width: 18ch; margin-bottom: 6px;
+  }
+  .lead-sub { max-width: 62ch; font-size: 10pt; line-height: 1.55; }
+
+  .lead-section {
+    margin-bottom: 7mm;
+  }
+  .lead-section-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 8px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .lead-section-title .ctx {
+    color: var(--ink-faint); letter-spacing: 1.5px;
+    font-size: 7pt;
+  }
+
+  .lead-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 7px;
+  }
+  .lead-card {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule-light);
+    padding: 8px 10px 8px;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .lead-card::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; width: 16px; height: 2px;
+    background: var(--mercury);
+  }
+  .lead-card .l-name {
+    font-family: 'Gloock', serif; font-size: 10.5pt;
+    line-height: 1.15; margin-bottom: 3px; letter-spacing: -0.2px;
+    color: var(--ink);
+  }
+  .lead-card .l-desc {
+    font-size: 7.5pt; color: var(--ink-soft);
+    line-height: 1.4; flex: 1;
+  }
+  .lead-card .l-desc strong { color: var(--ink); font-weight: 700; }
+  .lead-card .l-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 6pt; letter-spacing: 1px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-top: 5px; padding-top: 4px;
+    border-top: 1px dashed var(--rule-light);
+  }
+
+  .lead-foot {
+    margin-top: auto; padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 11pt; color: var(--ink-soft);
+    text-align: center;
+    max-width: 70ch; margin-left: auto; margin-right: auto;
+  }
+  .lead-foot .em { color: var(--mercury); }
+
+  /* ============================================================
+     PAGE 10 — CTA / COLOFÃO
+     ============================================================ */
+  .cta-main {
+    flex: 1; display: flex; flex-direction: column;
+    justify-content: center; text-align: center; padding: 0 12mm;
+  }
+  .cta-main h2 {
+    font-size: 30pt; font-weight: normal;
+    line-height: 1.14; letter-spacing: -0.5px;
+    max-width: 22ch; margin: 0 auto;
+  }
+  .cta-main h2 .em { color: var(--mercury); font-style: normal; }
+  .cta-main .subtitle {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 16pt; color: var(--ink-soft); margin-top: 14px;
+  }
+
+  .cta-box {
+    display: inline-flex; flex-direction: column; align-items: center;
+    background: var(--paper-alt);
+    border: 1.5px solid var(--mercury);
+    padding: 18px 44px 20px;
+    margin: 28px auto 0;
+    position: relative;
+  }
+  .cta-box::before, .cta-box::after {
+    content: ""; position: absolute;
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--mercury);
+  }
+  .cta-box::before { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+  .cta-box::after  { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+  .cta-box .cta-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--mercury);
+    margin-bottom: 8px;
+  }
+  .cta-box .cta-text {
+    font-family: 'Gloock', serif; font-size: 16pt;
+    letter-spacing: 0.3px; color: var(--ink);
+  }
+  .cta-box .cta-note {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 2px;
+    color: var(--ink-soft); text-transform: uppercase; margin-top: 10px;
+  }
+
+  .contact-strip {
+    margin-top: 28px; padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px;
+  }
+  .contact-item .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--ink-soft);
+    opacity: 0.72; margin-bottom: 5px;
+  }
+  .contact-item .value {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 12pt; color: var(--ink); letter-spacing: 0.2px;
+  }
+
+  .colofao {
+    margin-top: 18px; padding-top: 12px;
+    border-top: 1px solid var(--rule-light);
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7.5pt; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--ink-soft);
+    opacity: 0.78;
+  }
+  .colofao .center { text-align: center; flex: 1; }
+
+  @media print {
+    html, body { background: #fff; padding: 0; }
+    .page { margin: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Hex pattern (claro, único — usado em todas as páginas) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hex-paper" width="38.105" height="66" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#2B2520" stroke-opacity="0.06" stroke-width="0.7">
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(0,0)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(38.105,0)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(0,66)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(38.105,66)"/>
+        <polygon points="0,-22 19.0526,-11 19.0526,11 0,22 -19.0526,11 -19.0526,-11" transform="translate(19.0526,33)"/>
+      </g>
+    </pattern>
+  </defs>
+</svg>
+
+<!-- ============================================================
+     PÁGINA 1 — CAPA
+     ============================================================ -->
+<section class="page page-capa">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="capa-top">
+    <div class="label-block">
+      <span class="v">RELATÓRIO DE IMPLEMENTAÇÃO</span><br>
+      MVP · FASE 1
+    </div>
+    <div class="label-block right">
+      <span class="v">TIMELABS.COM.BR</span><br>
+      MMXXVI · MAIO
+    </div>
+  </div>
+
+  <div class="capa-center">
+    <p class="capa-eyebrow">AUTOMAÇÃO · CONTEÚDO · DIREITO</p>
+    <h1 class="capa-titulo">Mendes &amp; <span class="em">Vaz</span> Social</h1>
+    <p class="capa-tagline">Pipeline de conteúdo institucional, do briefing ao post aprovado.</p>
+    <p class="capa-sub">Entregue por TimeLabs</p>
+  </div>
+
+  <div class="capa-bottom">
+    <div>
+      <span class="field-label">Cliente</span>
+      <span class="field-value">Mendes &amp; Vaz Advogados</span>
+    </div>
+    <div>
+      <span class="field-label">Praça</span>
+      <span class="field-value">Belo Horizonte · MG</span>
+    </div>
+    <div>
+      <span class="field-label">Apresentação</span>
+      <span class="field-value">28 de maio de 2026</span>
+    </div>
+    <div>
+      <span class="field-label">Documento</span>
+      <span class="field-value">v1 · 24.05.26</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 2 — TESE
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">I · TESE</span>
+    <span class="right">Por que construímos assim</span>
+  </div>
+
+  <blockquote class="tese-quote">
+    O texto institucional de um escritório de advocacia <span class="em">nunca</span> pode estar dentro de uma imagem gerada por IA.
+  </blockquote>
+
+  <div class="tese-body">
+    <div class="gold-stripe"></div>
+    <div>
+      <p>Modelos generativos confundem letras, inventam palavras, criam erros de digitação. Para uma empresa cuja credibilidade vive da precisão da linguagem, isso é inaceitável.</p>
+      <p>O sistema parte deste princípio: a arte é gerada por IA, mas a tipografia é renderizada por código — fontes embarcadas, layout em HTML, composição em PNG via navegador headless. Resultado: zero erro de impressão, identidade visual idêntica em todo post, independência total de fontes externas durante a operação.</p>
+      <p>Sobre isso, somam-se três regras inegociáveis: paleta navy &amp; gold fixa, três variações por campanha com ângulos distintos (autoridade, dor, educativo), e <em>human-in-the-loop</em> sem exceções — nada publica sem o aval do Henrique.</p>
+    </div>
+  </div>
+
+  <div class="tese-signed">
+    <span>Engenharia &amp; Automação · MMXXVI</span>
+    <span class="name">TimeLabs</span>
+  </div>
+
+  <div class="folio">II · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 3 — SISTEMA + ESCOPO
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">II · ESCOPO</span>
+    <span class="right">O que foi construído na fase 1</span>
+  </div>
+
+  <h2 class="escopo-h2">Um sistema completo,<br>de ponta <span class="em">a ponta</span>.</h2>
+  <p class="lead escopo-lead">Da entrada do briefing até a exportação do post aprovado, todas as etapas vivem dentro de uma mesma central de controle. Sem ferramentas paralelas, sem planilha auxiliar, sem retrabalho manual. O Henrique abre o navegador, preenche sete campos e acompanha a geração em tempo real.</p>
+
+  <div class="escopo-stats">
+    <div>
+      <div class="stat-number">63</div>
+      <div class="stat-label">Testes automatizados<br>(unitários + smoke real)</div>
+    </div>
+    <div>
+      <div class="stat-number">3</div>
+      <div class="stat-label">Formatos de post<br>(quadrado · retrato · carrossel)</div>
+    </div>
+    <div>
+      <div class="stat-number">9.5</div>
+      <div class="stat-label">Nota técnica do MVP<br>(avaliação CTO sênior)</div>
+    </div>
+  </div>
+
+  <div class="pipeline-block">
+    <div class="label">— FLUXO DA GERAÇÃO</div>
+    <ol class="pipeline-flow">
+      <li>
+        <span class="step-num">01</span>
+        <span class="step-name">Briefing</span>
+        <span class="step-tech">Formulário · 7 campos</span>
+      </li>
+      <li>
+        <span class="step-num">02</span>
+        <span class="step-name">Geração de copy</span>
+        <span class="step-tech">OpenAI · gpt-4o</span>
+      </li>
+      <li>
+        <span class="step-num">03</span>
+        <span class="step-name">Geração de arte</span>
+        <span class="step-tech">Ideogram · V_2</span>
+      </li>
+      <li>
+        <span class="step-num">04</span>
+        <span class="step-name">Composição tipográfica</span>
+        <span class="step-tech">HTML/CSS → PNG</span>
+      </li>
+      <li>
+        <span class="step-num">05</span>
+        <span class="step-name">Aprovação humana</span>
+        <span class="step-tech">Henrique · in the loop</span>
+      </li>
+      <li>
+        <span class="step-num">06</span>
+        <span class="step-name">Exportação final</span>
+        <span class="step-tech">PNG · TXT · JSON</span>
+      </li>
+    </ol>
+  </div>
+
+  <div class="folio">III · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 4 — COMPONENTES (12 cards, 2 colunas)
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">III · ENTREGA</span>
+    <span class="right">Doze componentes em produção</span>
+  </div>
+
+  <div class="ent-intro">
+    <h2 class="ent-h2">Os componentes que <span class="em">sustentam</span> a operação.</h2>
+    <p class="lead ent-lead">Cada componente é independente, testado e substituível. Trocar de OpenAI para Anthropic, ou de Ideogram para outro provedor, exige editar um único arquivo de configuração — sem refatorar lógica de negócio.</p>
+  </div>
+
+  <div class="ent-cards">
+    <div class="ent-card">
+      <div class="card-num">— 01 —</div>
+      <div class="card-name">Central de Controle</div>
+      <div class="card-desc">Aplicação web local com dashboard, criação de campanhas, acompanhamento em tempo real, aprovação e calendário.</div>
+      <div class="card-tech">Flask · waitress · SPA</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 02 —</div>
+      <div class="card-name">Pipeline de geração</div>
+      <div class="card-desc">Orquestra copy → arte → composição em thread assíncrona. Cada etapa marcada com checkmark e indicador pulsante.</div>
+      <div class="card-tech">Python · threading</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 03 —</div>
+      <div class="card-name">Geração de copy</div>
+      <div class="card-desc">Três variações por campanha com ângulos distintos: autoridade técnica, dor do cliente, conteúdo educativo. Retry automático em falha.</div>
+      <div class="card-tech">OpenAI · gpt-4o</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 04 —</div>
+      <div class="card-name">Geração de arte</div>
+      <div class="card-desc">Imagens fotográficas profissionais sem clichês jurídicos, ambiente brasileiro acessível. Fallback automático em indisponibilidade.</div>
+      <div class="card-tech">Ideogram · V_2</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 05 —</div>
+      <div class="card-name">Composição tipográfica</div>
+      <div class="card-desc">Texto renderizado por HTML/CSS em navegador headless com fontes Playfair e Montserrat embarcadas. Zero erro de digitação.</div>
+      <div class="card-tech">Playwright · Chromium</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 06 —</div>
+      <div class="card-name">Edição manual de copy</div>
+      <div class="card-desc">Henrique ajusta headline, body, caption sem regerar via IA — recomposição instantânea, custo zero de API.</div>
+      <div class="card-tech">CRUD direto</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 07 —</div>
+      <div class="card-name">Sistema de aprovação</div>
+      <div class="card-desc">Três variações lado a lado, agendamento de data, aprovação ou solicitação de ajuste com nota direta ao modelo.</div>
+      <div class="card-tech">Interface humana</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 08 —</div>
+      <div class="card-name">Templates de briefing</div>
+      <div class="card-desc">Presets reutilizáveis para campanhas recorrentes. Duplicação direta de campanhas anteriores em um clique.</div>
+      <div class="card-tech">SQLite · UPSERT</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 09 —</div>
+      <div class="card-name">Sistema de quotas</div>
+      <div class="card-desc">Limites configuráveis (campanhas por mês, agendamentos futuros, pendências) — protege margem e educa uso saudável.</div>
+      <div class="card-tech">Hard + soft blocks</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 10 —</div>
+      <div class="card-name">Exportação estruturada</div>
+      <div class="card-desc">PNG em alta resolução, metadados em JSON, texto pronto para colar no Instagram. Organizado por campanha aprovada.</div>
+      <div class="card-tech">Filesystem · audit log</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 11 —</div>
+      <div class="card-name">Calendário editorial</div>
+      <div class="card-desc">Visão temporal das campanhas agendadas por data de publicação prevista. Facilita planejamento mensal.</div>
+      <div class="card-tech">SPA · client-side</div>
+    </div>
+    <div class="ent-card">
+      <div class="card-num">— 12 —</div>
+      <div class="card-name">Recuperação automática</div>
+      <div class="card-desc">Health-checks no startup; campanhas interrompidas são detectadas e marcadas — sem estados travados.</div>
+      <div class="card-tech">Self-healing</div>
+    </div>
+  </div>
+
+  <div class="folio">IV · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 5 — DECISÕES TÉCNICAS
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">IV · DECISÕES</span>
+    <span class="right">As escolhas que sustentam o MVP</span>
+  </div>
+
+  <div class="dec-intro">
+    <h2 class="dec-h2">Pragmatismo é a <span class="em">arquitetura</span>.</h2>
+    <p class="lead dec-lead">Todo MVP é uma série de trade-offs. Os abaixo foram escolhidos para entregar valor agora, sem hipotecar o futuro. Cada decisão tem custo de evolução estimável e ponto natural de reversão na fase 2.</p>
+  </div>
+
+  <div class="dec-list">
+    <div class="dec-row">
+      <div class="d-num">01</div>
+      <div class="d-titulo">Texto sempre renderizado por código</div>
+      <div class="d-justifica">Modelos de imagem não dominam tipografia em português. Texto vive em HTML/CSS com fontes embarcadas — <span class="em">tipografia perfeita, zero erro de digitação</span>.</div>
+    </div>
+    <div class="dec-row">
+      <div class="d-num">02</div>
+      <div class="d-titulo">Fontes embarcadas como data URI</div>
+      <div class="d-justifica">Playfair Display e Montserrat compiladas dentro dos templates. <span class="em">Demo e produção funcionam offline</span> — sem dependência de Google Fonts ou rede instável.</div>
+    </div>
+    <div class="dec-row">
+      <div class="d-num">03</div>
+      <div class="d-titulo">SQLite com WAL no lugar de banco grande</div>
+      <div class="d-justifica">Single-user, single-host. WAL permite leitor e escritor concorrentes sem servidor. Zero infra — <span class="em">substituição por Postgres é refatoração rápida na fase 2</span>.</div>
+    </div>
+    <div class="dec-row">
+      <div class="d-num">04</div>
+      <div class="d-titulo">Frontend vanilla, sem framework</div>
+      <div class="d-justifica">Sem React, sem build step, sem npm. O navegador serve o JavaScript direto. <span class="em">Edita-se e recarrega-se</span> — apropriado para MVP de poucas telas.</div>
+    </div>
+    <div class="dec-row">
+      <div class="d-num">05</div>
+      <div class="d-titulo">Fallback automático para imagens</div>
+      <div class="d-justifica">Se o Ideogram cair, o sistema gera placeholder navy/gold local e segue. <span class="em">Demo não quebra</span> por falha de provedor externo — princípio aplicado em toda integração paga.</div>
+    </div>
+    <div class="dec-row">
+      <div class="d-num">06</div>
+      <div class="d-titulo">Três variações com ângulos distintos</div>
+      <div class="d-justifica">O sistema impõe ao modelo que opção 1 seja autoridade, opção 2 seja dor do cliente, opção 3 seja educativa. <span class="em">Sem isso, as três saídas seriam variações cosméticas</span>.</div>
+    </div>
+    <div class="dec-row">
+      <div class="d-num">07</div>
+      <div class="d-titulo">Edição manual de copy sem regenerar</div>
+      <div class="d-justifica">Cada regeração custa em API. O sistema permite ajustar texto direto na interface — <span class="em">custo zero, recomposição instantânea do PNG</span>.</div>
+    </div>
+    <div class="dec-row">
+      <div class="d-num">08</div>
+      <div class="d-titulo">Quotas configuráveis desde o MVP</div>
+      <div class="d-justifica">Limites de uso por mês, por agendamento futuro, por regerações. <span class="em">Protege a margem antes mesmo de virar SaaS multi-cliente</span> — e educa uso saudável.</div>
+    </div>
+  </div>
+
+  <div class="folio">V · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 6 — MATURIDADE (CLARO)
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">V · MATURIDADE</span>
+    <span class="right">Avaliação técnica independente</span>
+  </div>
+
+  <div class="matur-hero">
+    <div class="matur-hero-left">
+      <h2>MVP <span class="em">acima da média</span> — fundação pronta para crescer.</h2>
+      <p class="lead">Avaliação independente sob a lente de Staff Engineer / CTO: o sistema não é improviso, e a base permite evolução sem reescrita. Os pontos de risco estão mapeados e endereçados na fase 2.</p>
+    </div>
+    <div class="score-block">
+      <div class="score-now">9.5<span class="sub"> / 10</span></div>
+      <div class="score-label">Nota do MVP</div>
+      <div class="score-from">Pré-polish: 8.2<br>Polish 24/05: 9.5</div>
+    </div>
+  </div>
+
+  <div class="matur-grid">
+    <div class="matur-cell">
+      <div class="cell-label">— Qualidade do MVP</div>
+      <div class="cell-value">8.5 / 10</div>
+      <div class="cell-desc">Faz o que promete, com testes e mecanismos de tolerância a falha em todos os pontos críticos.</div>
+    </div>
+    <div class="matur-cell">
+      <div class="cell-label">— Clareza arquitetural</div>
+      <div class="cell-value">8.0 / 10</div>
+      <div class="cell-desc">Módulos bem nomeados, responsabilidades distintas, configuração centralizada num único arquivo.</div>
+    </div>
+    <div class="matur-cell">
+      <div class="cell-label">— Velocidade de entrega</div>
+      <div class="cell-value">9.0 / 10</div>
+      <div class="cell-desc">MVP completo entregue em duas semanas, com 63 testes automatizados e documentação técnica.</div>
+    </div>
+    <div class="matur-cell">
+      <div class="cell-label">— Potencial de evolução</div>
+      <div class="cell-value">7.0 / 10</div>
+      <div class="cell-desc">Base aceita crescimento; alguns refatores cirúrgicos na fase 2 destravam multi-cliente.</div>
+    </div>
+    <div class="matur-cell">
+      <div class="cell-label">— Qualidade de engenharia</div>
+      <div class="cell-value">8.0 / 10</div>
+      <div class="cell-desc">Tipagem, validação em fronteiras, retry com backoff exponencial, tratamento explícito de erros.</div>
+    </div>
+    <div class="matur-cell">
+      <div class="cell-label">— Capacidade de escala</div>
+      <div class="cell-value">6.0 / 10</div>
+      <div class="cell-desc">Single-host hoje; evolução estimada em quatro a seis semanas para atender múltiplos escritórios.</div>
+    </div>
+  </div>
+
+  <div class="folio">VI · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 7 — ROADMAP FASE 2
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VI · ROADMAP</span>
+    <span class="right">O que vem na fase 2 (pós-validação)</span>
+  </div>
+
+  <div class="road-intro">
+    <h2 class="road-h2">Caminho do MVP ao <span class="em">produto operável</span>.</h2>
+    <p class="lead road-lead">Seis blocos de trabalho que transformam o MVP local em SaaS hospedado, capaz de atender múltiplos escritórios em produção real. Cada bloco é independente — podem ser executados em paralelo ou faseados conforme prioridade comercial.</p>
+  </div>
+
+  <div class="road-blocks">
+    <div class="road-block">
+      <div class="b-num">— BLOCO I —</div>
+      <div class="b-name">Multi-usuário</div>
+      <div class="b-est">2 a 3 dias</div>
+      <ul class="b-list">
+        <li>Autenticação com e-mail e senha</li>
+        <li>Schema multi-tenant em todas as tabelas</li>
+        <li>Papéis: admin, aprovador, criador</li>
+        <li>Isolamento de dados entre escritórios</li>
+      </ul>
+    </div>
+    <div class="road-block">
+      <div class="b-num">— BLOCO II —</div>
+      <div class="b-name">Persistência em nuvem</div>
+      <div class="b-est">2 dias</div>
+      <ul class="b-list">
+        <li>Migração SQLite → Postgres gerenciado</li>
+        <li>PNGs em object storage (Cloudflare R2)</li>
+        <li>URLs assinadas para preview</li>
+        <li>Backup diário automático</li>
+      </ul>
+    </div>
+    <div class="road-block">
+      <div class="b-num">— BLOCO III —</div>
+      <div class="b-name">Deploy em produção</div>
+      <div class="b-est">1 dia e meio</div>
+      <ul class="b-list">
+        <li>Containerização (Docker)</li>
+        <li>Hospedagem Railway ou Fly.io</li>
+        <li>Domínio próprio com HTTPS automático</li>
+        <li>Servidor com workers e graceful shutdown</li>
+      </ul>
+    </div>
+    <div class="road-block">
+      <div class="b-num">— BLOCO IV —</div>
+      <div class="b-name">Observabilidade</div>
+      <div class="b-est">2 dias</div>
+      <ul class="b-list">
+        <li>Captura de erros (Sentry)</li>
+        <li>Monitoramento de uptime</li>
+        <li>Dashboard interno de custo por cliente</li>
+        <li>Alertas proativos no Slack</li>
+      </ul>
+    </div>
+    <div class="road-block">
+      <div class="b-num">— BLOCO V —</div>
+      <div class="b-name">Segurança de produção</div>
+      <div class="b-est">1 dia</div>
+      <ul class="b-list">
+        <li>Rate limiting por usuário</li>
+        <li>Proteção CSRF</li>
+        <li>Headers de segurança (CSP)</li>
+        <li>Rotação programada das chaves de API</li>
+      </ul>
+    </div>
+    <div class="road-block">
+      <div class="b-num">— BLOCO VI —</div>
+      <div class="b-name">Publicação automática</div>
+      <div class="b-est">2 a 3 dias</div>
+      <ul class="b-list">
+        <li>Integração com Buffer ou Meta API</li>
+        <li>Cron job que publica no horário</li>
+        <li>Captação de leads via UTM próprio</li>
+        <li>Landing page por campanha aprovada</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="road-numbers">
+    <div class="rn-cell">
+      <div class="rn-label">— ESFORÇO TOTAL</div>
+      <div class="rn-value">10–12<span class="sub">dias úteis</span></div>
+    </div>
+    <div class="rn-cell">
+      <div class="rn-label">— INFRA FIXA</div>
+      <div class="rn-value">R$ 27–82<span class="sub">/mês</span></div>
+    </div>
+    <div class="rn-cell">
+      <div class="rn-label">— POR CLIENTE</div>
+      <div class="rn-value">R$ 8–10<span class="sub">/mês</span></div>
+    </div>
+    <div class="rn-cell">
+      <div class="rn-label">— TICKET SUGERIDO</div>
+      <div class="rn-value">R$ 300–500<span class="sub">/escritório</span></div>
+    </div>
+  </div>
+
+  <div class="folio">VII · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 8 — WHATSAPP
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VII · EXPANSÃO ESTRATÉGICA</span>
+    <span class="right">WhatsApp como camada operacional</span>
+  </div>
+
+  <div class="whats-intro">
+    <h2 class="whats-h2">O canal <span class="em">mais rápido</span> de ser visto.</h2>
+    <p class="lead whats-lead">Quando a publicação passa a ser automática e os leads chegam organicamente, o tempo entre o evento e a ação do operador é tudo. O WhatsApp é o canal mais rápido de chegar ao Henrique — superior a e-mail, push de app ou notificação no painel.</p>
+  </div>
+
+  <div class="whats-flow">
+    <div class="whats-card">
+      <div class="wleft">
+        <div class="wn">— EIXO 01 —</div>
+        <div class="wt">Notificações operacionais</div>
+        <div class="ws">para o Henrique</div>
+      </div>
+      <div class="wright">
+        Toda vez que <strong>uma campanha é publicada com sucesso</strong>, ou falha por algum motivo, o sistema dispara uma mensagem direta no WhatsApp do operador. Ele toma ciência em segundos, não em horas. Inclui resumo, link para a publicação ao vivo e, em caso de falha, o motivo objetivo e o que precisa ser feito.
+        <div class="wbox">Trigger · publicação · erro</div>
+      </div>
+    </div>
+    <div class="whats-card">
+      <div class="wleft">
+        <div class="wn">— EIXO 02 —</div>
+        <div class="wt">Captação de leads</div>
+        <div class="ws">do post ao contato</div>
+      </div>
+      <div class="wright">
+        Cada post aprovado pode carregar um <strong>link com UTM próprio</strong> apontando para uma landing dedicada ou direto para um número WhatsApp Business com mensagem pré-preenchida. O lead chega já contextualizado pela campanha que o trouxe — qualifica-se mais rápido e converte melhor.
+        <div class="wbox">Origem · campanha · UTM</div>
+      </div>
+    </div>
+    <div class="whats-card">
+      <div class="wleft">
+        <div class="wn">— EIXO 03 —</div>
+        <div class="wt">Resumo diário</div>
+        <div class="ws">o que aconteceu nas últimas 24h</div>
+      </div>
+      <div class="wright">
+        Uma mensagem única no início do dia consolidando: <strong>campanhas publicadas, leads recebidos, próximas agendadas</strong>, e o que demanda atenção do operador. Substitui a necessidade de abrir o painel se nada urgente aconteceu — o painel passa a ser ferramenta de gestão, não vigilância.
+        <div class="wbox">Cron · diário · 08h00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="whats-foot">
+    Aprovação via WhatsApp permanece em estudo — a riqueza visual da tela de aprovação atual <span class="em">justifica manter o painel</span> como ponto principal, com o WhatsApp atuando como camada de alerta e captura.
+  </div>
+
+  <div class="folio">VIII · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 9 — CAPTAÇÃO DE LEADS
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">VIII · CAPTAÇÃO DE LEADS</span>
+    <span class="right">Onde o post vira contato</span>
+  </div>
+
+  <div class="lead-intro">
+    <h2 class="lead-h2">Do <span class="em" style="color:var(--mercury)">scroll</span> ao contato real.</h2>
+    <p class="lead-sub">Publicar é só metade do trabalho. A outra metade é construir caminhos curtos para que quem se interessou pelo post chegue de fato à Mendes &amp; Vaz — dentro das redes (sem tirar o usuário do app) ou fora delas (página própria, WhatsApp, CRM).</p>
+  </div>
+
+  <div class="lead-section">
+    <div class="lead-section-title">
+      <span>— Dentro das redes</span>
+      <span class="ctx">Sem fricção · sem sair do app</span>
+    </div>
+    <div class="lead-grid">
+      <div class="lead-card">
+        <div class="l-name">Link na bio com UTM por campanha</div>
+        <div class="l-desc">Cada campanha publicada atualiza o link na bio do Instagram via <strong>Linktree, Beacons ou link-in-bio próprio</strong>, com UTM rastreável. O lead que clica é atribuído à peça que o trouxe.</div>
+        <div class="l-tag">Instagram · LinkedIn · UTM</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">Sticker de pergunta no Stories</div>
+        <div class="l-desc">Quando o conteúdo permite, o sistema sugere copy para Stories com <strong>sticker de pergunta, enquete ou caixa de mensagem</strong>. Resposta cai direto no DM da Mendes &amp; Vaz, já segmentada por tema.</div>
+        <div class="l-tag">Instagram · Stories · DM</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">CTA no carrossel → DM</div>
+        <div class="l-desc">Último slide do carrossel sempre carrega CTA explícito: <strong>"Mande DM com a palavra X"</strong>. Triggers de automação respondem imediatamente com material complementar ou agendamento.</div>
+        <div class="l-tag">Instagram · Carrossel · Automação</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">Comentário fixado</div>
+        <div class="l-desc">Após publicar, sistema deixa <strong>comentário fixado com link, contato ou pergunta-âncora</strong>. Reduz fricção de quem chega pelo feed e quer continuar a conversa sem sair do post.</div>
+        <div class="l-tag">Instagram · LinkedIn · Engajamento</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">Botão LinkedIn "Saiba mais"</div>
+        <div class="l-desc">No LinkedIn Company Page, post patrocinado ou orgânico pode carregar <strong>CTA nativo</strong> (Saiba mais, Inscreva-se, Cadastre-se). O lead preenche dentro do LinkedIn — taxa de conversão alta.</div>
+        <div class="l-tag">LinkedIn · Lead Gen Form</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">Lead Gen Forms nativos</div>
+        <div class="l-desc">Para campanhas pagas no LinkedIn, formulários nativos preenchem automaticamente <strong>nome, email e cargo</strong> a partir do perfil. Lead chega no CRM sem o usuário digitar nada.</div>
+        <div class="l-tag">LinkedIn Ads · CRM</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lead-section">
+    <div class="lead-section-title">
+      <span>— Fora das redes</span>
+      <span class="ctx">Quando o lead aceita sair do app</span>
+    </div>
+    <div class="lead-grid">
+      <div class="lead-card">
+        <div class="l-name">Landing page dedicada por campanha</div>
+        <div class="l-desc">Cada campanha pode gerar <strong>/lp/&lt;campaign_id&gt;</strong> com headline, CTA e formulário próprios. URL curta, rastreável, A/B testável. Hospedagem trivial (Vercel, Netlify).</div>
+        <div class="l-tag">Landing · UTM · A/B</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">WhatsApp Business com pré-preenchida</div>
+        <div class="l-desc">Link <strong>wa.me/&lt;número&gt;?text=...</strong> abre o WhatsApp já com mensagem digitada. Lead só aperta enviar. Operador recebe contexto da campanha antes mesmo de responder.</div>
+        <div class="l-tag">WhatsApp · UTM · Contexto</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">QR code no material impresso</div>
+        <div class="l-desc">Mesma campanha pode virar <strong>folder, banner ou cartão</strong> com QR apontando para landing ou WhatsApp. Conecta o digital ao físico — útil em eventos e atendimento presencial.</div>
+        <div class="l-tag">Offline · QR · Atribuição</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">Formulário → Airtable / CRM</div>
+        <div class="l-desc">Submit do formulário cai em <strong>Airtable, Notion DB, HubSpot ou Pipedrive</strong> via webhook. Status, origem (campanha) e data ficam registrados para acompanhamento comercial.</div>
+        <div class="l-tag">Webhook · CRM · Pipeline</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">Pixel de remarketing</div>
+        <div class="l-desc">Quem visita a landing mas não converte entra em <strong>público de remarketing</strong> (Meta Pixel, LinkedIn Insight Tag). Próxima campanha pode falar especificamente com quem já demonstrou interesse.</div>
+        <div class="l-tag">Pixel · Remarketing · Funil</div>
+      </div>
+      <div class="lead-card">
+        <div class="l-name">Email follow-up automático</div>
+        <div class="l-desc">Lead que preencheu formulário recebe <strong>sequência automática</strong> (boas-vindas + material complementar + convite para conversa). Resend, Mailgun ou SendGrid resolvem com pouco código.</div>
+        <div class="l-tag">Email · Nurturing · Automação</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lead-foot">
+    Captação não é uma escolha entre <span class="em">dentro</span> ou <span class="em">fora</span> das redes — é uma camada que envolve as duas, com o WhatsApp como cola operacional e o CRM como destino final.
+  </div>
+
+  <div class="folio">IX · X</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 10 — CTA / COLOFÃO
+     ============================================================ -->
+<section class="page">
+  <div class="hex-bg">
+    <svg viewBox="0 0 793 1120" preserveAspectRatio="xMidYMid slice">
+      <rect width="100%" height="100%" fill="url(#hex-paper)"/>
+    </svg>
+  </div>
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">IX · CONCLUSÃO</span>
+    <span class="right">Próximos passos</span>
+  </div>
+
+  <div class="cta-main">
+    <h2>A fase 1 está pronta para ser <span class="em">apresentada</span>.</h2>
+    <p class="subtitle">A fase 2 está documentada para ser decidida.</p>
+
+    <div class="cta-box">
+      <div class="cta-label">— PRÓXIMO MARCO —</div>
+      <div class="cta-text">Demo · 28 de maio de 2026</div>
+      <div class="cta-note">Validação técnica e comercial · Mendes &amp; Vaz</div>
+    </div>
+  </div>
+
+  <div class="contact-strip">
+    <div class="contact-item">
+      <div class="label">— Entregue por</div>
+      <div class="value">TimeLabs</div>
+    </div>
+    <div class="contact-item">
+      <div class="label">— Engenharia</div>
+      <div class="value">Enzo Ferraz</div>
+    </div>
+    <div class="contact-item">
+      <div class="label">— Documento</div>
+      <div class="value">v2 · 24.05.26</div>
+    </div>
+  </div>
+
+  <div class="colofao">
+    <span>TIMELABS · MMXXVI</span>
+    <span class="center">RELATÓRIO DE IMPLEMENTAÇÃO</span>
+    <span>X · X</span>
+  </div>
+</section>
+
+</body>
+</html>
