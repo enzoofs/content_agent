@@ -24,17 +24,23 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 CAMPAIGNS_DIR = BASE_DIR / "campaigns"
 EXPORTS_DIR = BASE_DIR / "exports"
 APPROVAL_UI_DIR = BASE_DIR / "approval_ui"
-
-LOGO_PATH = ASSETS_DIR / "logo_mendes_vaz.png"
-
-# Fontes embarcadas no template (woff2 subset latin). Embutidas como data URI
-# no @font-face — a renderização NÃO depende de Google Fonts estar acessível.
 FONTS_DIR = ASSETS_DIR / "fonts"
-FONT_FILES = {
-    "montserrat_400": FONTS_DIR / "montserrat-400.woff2",
-    "montserrat_600": FONTS_DIR / "montserrat-600.woff2",
-    "playfair_700": FONTS_DIR / "playfair-display-700.woff2",
-}
+
+# --------------------------------------------------------------------------
+# Brand atual (extraído por cliente em config/brands/ — Fase B.1)
+# --------------------------------------------------------------------------
+# Cada cliente vira um módulo em config/brands/ exportando `BRAND = Brand(...)`.
+# A env var `BRAND` escolhe qual carregar; default = mendes_vaz (cliente piloto).
+# Pra rodar como Gui Raw: `BRAND=gui_raw python main.py --serve`.
+from config import brands  # noqa: E402 — depende de BASE_DIR/load_dotenv acima
+
+BRAND_NAME = os.getenv("BRAND", "mendes_vaz")
+brand = brands.load(BRAND_NAME)
+
+# Atributos do brand re-exportados como constantes módulo-level pra manter
+# compatibilidade com todos os módulos que já leem settings.COLORS, etc.
+LOGO_PATH = brand.logo_path
+FONT_FILES = brand.font_files
 
 # Banco de estado (SQLite). Tudo que era state.json/briefing.json/copy_v*.json
 # agora vive aqui; PNGs continuam em campaigns/{id}/ no FS.
@@ -59,22 +65,10 @@ TEMPLATE_BY_FORMAT = {
 }
 
 # --------------------------------------------------------------------------
-# Identidade visual — paleta exata Mendes & Vaz (NUNCA desviar)
+# Identidade visual — vem do brand atual (config/brands/<slug>.py)
 # --------------------------------------------------------------------------
-COLORS = {
-    "navy": "#272D4D",       # dominante, fundos principais
-    "gold": "#E3B644",       # destaque, títulos, elementos gráficos
-    "white": "#FFFFFF",      # texto sobre navy
-    "cream": "#F5F0E8",      # fundos claros
-    "navy_dark": "#1A2038",  # overlays, gradientes
-}
-
-# Tipografia para posts (Google Fonts) — não usar Inter/Roboto/Arial/Helvetica
-FONTS = {
-    "heading": "Playfair Display",
-    "subhead": "Montserrat",
-    "body": "Montserrat",
-}
+COLORS = brand.colors
+FONTS = brand.fonts
 
 # --------------------------------------------------------------------------
 # Geração de copy — OpenAI (substitui a Claude API nesta fase)
@@ -108,22 +102,13 @@ USE_MOCK_IMAGES = (
 IDEOGRAM_CONFIG = {
     "model": "V_2",
     "style_type": "REALISTIC",
-    # Negative prompt: tira clichês jurídicos + ESTÉTICA LUXUOSA (escritório
-    # acessível BR, não palácio) + cenas com muita gente / mãos em close.
-    "negative_prompt": (
-        "text, words, letters, watermark, logo, signature, "
-        "scales of justice, gavel, hammer, cartoon, illustration, "
-        "vibrant colors, neon, grunge, ugly, deformed, blurry, "
-        "low quality, amateur, "
-        "luxurious, opulent, marble, gold leaf, palace, mansion, "
-        "expensive interior, chandelier, ornate, "
-        "crowd, group of people, many people, multiple hands, "
-        "close-up of hands, complex interactions, handshake closeup"
-    ),
-    # color_palette REMOVIDO de propósito: forçava navy+gold em toda imagem,
-    # deixando o feed monocromático (efeito Wes Anderson). A identidade visual
-    # da marca já é garantida pelo overlay+filete+logo+CTA do template — aqui
-    # deixamos a arte respirar com cores naturais (madeira, luz, ambiente real).
+    # Negative prompt vem do brand (varia por cliente — Mendes & Vaz tira
+    # clichês jurídicos / luxo; Gui Raw tira clichê de stock photo, etc).
+    "negative_prompt": brand.ideogram_negative_prompt,
+    # color_palette REMOVIDO de propósito: forçava paleta do brand em toda
+    # imagem, deixando o feed monocromático (efeito Wes Anderson). A identidade
+    # visual já é garantida pelo overlay/filete/logo do template — aqui
+    # deixamos a arte respirar com cores naturais.
 }
 
 # Resolução da Ideogram por formato de post
@@ -134,18 +119,10 @@ IDEOGRAM_RESOLUTIONS = {
     "story": "RESOLUTION_720_1280",   # 9:16 nativo na V_2; composer faz upscale pra 1080x1920
 }
 
-# Sufixo anexado ao image_prompt — estética DELIBERADAMENTE acessível:
-# escritório pequeno/médio brasileiro, classe média, profissional sem ser
-# luxuoso. Texto NUNCA na imagem (vem renderizado por código no template).
-# Não direcionamos paleta aqui — o branding navy/gold vem do template overlay,
-# então a arte pode ter cores naturais (madeira, luz, plantas, ambiente real).
-IMAGE_PROMPT_SUFFIX = (
-    "small to medium-sized law firm, modest professional office, "
-    "Brazilian middle-class environment, accessible, realistic, "
-    "natural lighting, "
-    "1 person (or at most 2), diverse representation, "
-    "professional but simple, not luxurious, no text"
-)
+# Sufixo anexado ao image_prompt — vem do brand atual. Texto NUNCA na imagem
+# (vem renderizado por código no template). Não direcionamos paleta aqui — o
+# branding vem do template overlay, então a arte pode ter cores naturais.
+IMAGE_PROMPT_SUFFIX = brand.image_prompt_suffix
 
 # --------------------------------------------------------------------------
 # Servidor de aprovação (Flask local)
@@ -153,8 +130,8 @@ IMAGE_PROMPT_SUFFIX = (
 APPROVAL_HOST = "localhost"
 APPROVAL_PORT = 5000
 
-# Nome de quem aprova (vai para os metadados de export)
-APPROVED_BY = "Henrique Mendes"
+# Nome de quem aprova (vai para os metadados de export) — vem do brand atual
+APPROVED_BY = brand.approved_by
 
 # --------------------------------------------------------------------------
 # Quotas / prevenção de abuse
