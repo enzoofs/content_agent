@@ -11,7 +11,60 @@ Estes valores eram hardcoded em config/settings.py até a extração de brands
 
 from pathlib import Path
 
-from config.brands import Brand
+from config.brands import Brand, BriefingField
+
+
+# --- Formatadores de user message (Fase B.3.1) ----------------------------
+# Idênticos ao que vivia em modules/copy_generator.py antes da extração.
+
+def _build_user_message(briefing: dict, nota_ajuste: str = "") -> str:
+    tema = briefing["tema_especifico"] or "(livre — você escolhe a pauta)"
+    referencias = briefing["referencias"] or "(nenhuma)"
+    msg = (
+        "Gere 3 variações de copy para um post seguindo este briefing:\n\n"
+        f"- Área do direito: {briefing['area_direito']}\n"
+        f"- Perfil do cliente ideal: {briefing['perfil_cliente_ideal']}\n"
+        f"- Tom: {briefing['tom']}\n"
+        f"- Objetivo: {briefing['objetivo']}\n"
+        f"- Formato do post: {briefing['formato']} ({briefing['num_slides']} slide(s))\n"
+        f"- Tema específico: {tema}\n"
+        f"- Referências/observações: {referencias}\n\n"
+        "Lembre-se dos limites: headline <=60 chars, subheadline <=80, "
+        "body <=150, cta <=40, caption <=2200, até 20 hashtags."
+    )
+    if nota_ajuste.strip():
+        msg += (
+            "\n\nAJUSTE SOLICITADO PELO CLIENTE (priorize ao máximo este pedido): "
+            f"{nota_ajuste.strip()}"
+        )
+    return msg
+
+
+def _build_user_message_carousel(briefing: dict, nota_ajuste: str = "") -> str:
+    tema = briefing["tema_especifico"] or "(livre — você escolhe a pauta)"
+    referencias = briefing["referencias"] or "(nenhuma)"
+    n = briefing["num_slides"]
+    msg = (
+        f"Gere 3 variações de carrossel com EXATAMENTE {n} slides cada, "
+        "seguindo este briefing:\n\n"
+        f"- Área do direito: {briefing['area_direito']}\n"
+        f"- Perfil do cliente ideal: {briefing['perfil_cliente_ideal']}\n"
+        f"- Tom: {briefing['tom']}\n"
+        f"- Objetivo: {briefing['objetivo']}\n"
+        f"- Formato: carrossel ({n} slides)\n"
+        f"- Tema específico: {tema}\n"
+        f"- Referências/observações: {referencias}\n\n"
+        f"Cada variação (option) deve ter 1 caption + 1 cta + 1 lista de hashtags, "
+        f"e {n} slides com slide_id 1..{n}.\n"
+        "Limites: headline (slide) <=60 chars, subheadline (slide) <=80, "
+        "body (slide) <=150, cta <=40, caption <=2200, até 20 hashtags."
+    )
+    if nota_ajuste.strip():
+        msg += (
+            "\n\nAJUSTE SOLICITADO PELO CLIENTE (priorize ao máximo este pedido): "
+            f"{nota_ajuste.strip()}"
+        )
+    return msg
 
 _BASE_DIR = Path(__file__).parent.parent.parent
 _ASSETS = _BASE_DIR / "assets"
