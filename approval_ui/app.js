@@ -40,6 +40,7 @@ function route() {
   if (hash === "#/" || hash === "") return renderDashboard();
   if (hash === "#/novo") return renderNovo();
   if (hash === "#/calendario") return renderCalendario();
+  if (hash === "#/historico") return renderHistorico();
   if (m) return renderCampanha(decodeURIComponent(m[1]));
   renderDashboard();
 }
@@ -128,6 +129,61 @@ async function duplicarCampanha(campaignId) {
   } catch (e) {
     alert(`Falha ao duplicar: ${e.message}`);
   }
+}
+
+// ====================== Histórico (aprovadas) ======================
+async function renderHistorico() {
+  app().innerHTML = dashSkeleton(4);
+  let campaigns;
+  try {
+    campaigns = await fetchJSON("/api/campaigns");
+  } catch (e) {
+    return showError(`Erro ao carregar histórico: ${e.message}`);
+  }
+  const aprovadas = campaigns.filter((c) => c.status === "aprovada");
+
+  if (!aprovadas.length) {
+    app().innerHTML = `
+      <a class="back" href="#/">← Campanhas</a>
+      <div class="empty">
+        <h2>Nenhuma campanha aprovada ainda</h2>
+        <p>Quando você aprovar campanhas, elas aparecem aqui pra revisitar e baixar.</p>
+      </div>`;
+    return;
+  }
+
+  app().innerHTML = `<h1 class="page-title">Histórico de aprovadas</h1>`;
+  const grid = el("div", "dash-grid");
+  aprovadas.forEach((c) => grid.appendChild(historicoCard(c)));
+  app().appendChild(grid);
+}
+
+function historicoCard(c) {
+  const b = c.briefing || {};
+  const tema = b.tema_especifico || b.area_direito || c.campaign_id;
+  const card = el("div", "dash-card");
+
+  card.appendChild(textEl("div", "badge badge-approved", "Aprovada"));
+  card.appendChild(textEl("h3", "dash-card-title", tema));
+  const meta = [b.area_direito, b.formato].filter(Boolean).join(" · ");
+  card.appendChild(textEl("p", "dash-card-meta", meta));
+  if (c.data_agendada) {
+    card.appendChild(textEl("p", "dash-card-date", `📅 ${formatDate(c.data_agendada)}`));
+  }
+
+  const actions = el("div", "historico-actions");
+
+  const verBtn = textEl("a", "btn btn-adjust", "Ver detalhes");
+  verBtn.href = `#/campanha/${encodeURIComponent(c.campaign_id)}`;
+  actions.appendChild(verBtn);
+
+  const dlBtn = textEl("a", "btn btn-approve", "⬇ Baixar .zip");
+  dlBtn.href = `/api/campaigns/${encodeURIComponent(c.campaign_id)}/download`;
+  dlBtn.setAttribute("download", "");
+  actions.appendChild(dlBtn);
+
+  card.appendChild(actions);
+  return card;
 }
 
 // ====================== Nova campanha ======================
@@ -592,6 +648,8 @@ function renderAprovada(data) {
   const dataAg = data.state.data_agendada;
   const exp = data.exports || {};
   const allPngs = exp.all_pngs || (exp.png ? [exp.png] : []);
+  const cid = data.briefing.campaign_id;
+  const dlUrl = `/api/campaigns/${encodeURIComponent(cid)}/download`;
 
   app().innerHTML = `
     <a class="back" href="#/">← Campanhas</a>
@@ -600,12 +658,15 @@ function renderAprovada(data) {
       <h2>Post aprovado</h2>
       <p>A Opção ${op} foi exportada e está pronta para publicação.</p>
       ${dataAg ? `<p class="done-hint">📅 Agendada para ${formatDate(dataAg)}</p>` : ""}
+      <a class="btn btn-approve done-download" href="${dlUrl}" download>
+        ⬇ Baixar pacote (.zip) — imagens + legendas + briefing
+      </a>
     </div>
 
-    <div class="export-paths">
-      <h3 class="export-paths-title">Arquivos exportados</h3>
+    <details class="export-paths">
+      <summary class="export-paths-title">Arquivos no servidor (avançado)</summary>
       <div class="export-list" id="export-list"></div>
-    </div>`;
+    </details>`;
 
   const list = document.getElementById("export-list");
   if (exp.post_txt) list.appendChild(exportRow("Texto pra postar (post.txt)", exp.post_txt));

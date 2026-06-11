@@ -21,12 +21,14 @@ Estáticos:
 
 from __future__ import annotations
 
+import io
 import json
 import threading
 import traceback
 import webbrowser
+import zipfile
 
-from flask import Flask, abort, jsonify, request, send_from_directory
+from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 from waitress import serve as waitress_serve
 
 from config import settings
@@ -181,6 +183,29 @@ def _compute_export_paths(campaign_id: str, option_id: int, formato: str | None,
     return paths
 
 
+def _briefing_to_text(briefing: dict | None) -> str:
+    """Briefing humano-legível pro pacote .zip que o cliente baixa."""
+    if not briefing:
+        return "Briefing indisponível.\n"
+    linhas = [
+        f"Campanha: {briefing.get('campaign_id', '')}",
+        f"Criada em: {briefing.get('created_at', '')}",
+        "",
+        f"Área do direito: {briefing.get('area_direito', '')}",
+        f"Perfil do cliente ideal: {briefing.get('perfil_cliente_ideal', '')}",
+        f"Tom: {briefing.get('tom', '')}",
+        f"Objetivo: {briefing.get('objetivo', '')}",
+        f"Formato: {briefing.get('formato', '')}",
+    ]
+    if briefing.get("formato") == "carousel":
+        linhas.append(f"Nº de slides: {briefing.get('num_slides', '')}")
+    linhas += [
+        f"Tema específico: {briefing.get('tema_especifico') or '(livre)'}",
+        f"Referências: {briefing.get('referencias') or '(nenhuma)'}",
+    ]
+    return "\n".join(linhas) + "\n"
+
+
 # --------------------------------------------------------------------------
 # Edição manual de copy (sem regenerar via LLM)
 # --------------------------------------------------------------------------
@@ -332,6 +357,47 @@ def build_app() -> Flask:
             "export_post_txt": str(export["post_txt"]),
             "export_all_pngs": [str(p) for p in export["all_pngs"]],
         })
+
+    @app.route("/api/campaigns/<cid>/download", methods=["GET"])
+    def api_download(cid: str):
+        """
+        Empacota a campanha aprovada num .zip e devolve via navegador.
+
+        Conteúdo: PNGs compostos + legendas.txt (pronto pra postar) + briefing.txt
+        (referência humana). O cliente escolhe onde salvar no diálogo do browser
+        — não precisa saber a estrutura de pastas do servidor.
+        """
+        estado = campaign_store.read_state(cid)
+        if estado is None:
+            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
+        if estado.get("status") != "aprovada" or not estado.get("option_aprovada"):
+            return jsonify({"erro": "Só dá pra baixar campanha aprovada."}), 409
+
+        briefing = campaign_store.read_briefing(cid)
+        oid = int(estado["option_aprovada"])
+        export_dir = settings.EXPORTS_DIR / cid
+
+        if not export_dir.exists():
+            return jsonify({"erro": "Pasta de exports ausente — re-aprove a campanha."}), 410
+
+        pngs = sorted(export_dir.glob(f"option{oid}*.png"))
+        post_txt = export_dir / f"option{oid}_post.txt"
+        if not pngs or not post_txt.exists():
+            return jsonify({"erro": "Arquivos da opção aprovada ausentes."}), 410
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for p in pngs:
+                zf.write(p, arcname=p.name)
+            zf.writestr("legendas.txt", post_txt.read_text(encoding="utf-8"))
+            zf.writestr("briefing.txt", _briefing_to_text(briefing))
+        buf.seek(0)
+
+        nome = f"{cid}_opcao{oid}.zip"
+        return send_file(
+            buf, mimetype="application/zip",
+            as_attachment=True, download_name=nome,
+        )
 
     @app.route("/api/campaigns/<cid>/duplicate", methods=["POST"])
     def api_duplicate(cid: str):
