@@ -15,11 +15,89 @@ NOTAS DE PLACEHOLDER (B.1):
 
 from pathlib import Path
 
-from config.brands import Brand
+from config.brands import Brand, BriefingField
 
 _BASE_DIR = Path(__file__).parent.parent.parent
 _ASSETS = _BASE_DIR / "assets"
 _FONTS = _ASSETS / "fonts"
+
+
+# --- Briefing fields (B.3.1) ----------------------------------------------
+# Mantém os MESMOS nomes de campo do parser (area_direito, tom, objetivo etc.)
+# pra não tocar `modules/briefing_parser.py`. Só os rótulos/placeholders/labels
+# de enum mudam pra contexto musical. O system prompt do Gui é tolerante a
+# esses nomes — interpreta `area_direito` como "vibe/contexto do evento".
+_GUI_BRIEFING_FIELDS = (
+    BriefingField(
+        name="area_direito",
+        label="Tipo / vibe do evento",
+        kind="text",
+        required=True,
+        max_chars=200,
+        placeholder="ex.: festival de psytrance, casamento elegante, club techno",
+    ),
+    BriefingField(
+        name="perfil_cliente_ideal",
+        label="Público / contratante",
+        kind="textarea",
+        required=True,
+        max_chars=500,
+        rows=2,
+        placeholder="ex.: produtores de festival outdoor em SP buscando DJ versátil",
+    ),
+    BriefingField(
+        name="tom",
+        label="Tom",
+        kind="enum",
+        enum_values=("tecnico", "acessivel"),
+        enum_labels=("Técnico / curatorial", "Direto / hype"),
+        default="acessivel",
+    ),
+    BriefingField(
+        name="objetivo",
+        label="Objetivo",
+        kind="enum",
+        enum_values=("posicionamento", "awareness", "captacao"),
+        enum_labels=("Posicionamento", "Awareness / brand", "Captação / booking"),
+        default="awareness",
+    ),
+    BriefingField(
+        name="formato",
+        label="Formato",
+        kind="enum",
+        enum_values=("square", "portrait", "story", "carousel"),
+        enum_labels=("Square (1080×1080)", "Portrait (1080×1350)", "Story (1080×1920)", "Carrossel"),
+        default="square",
+    ),
+    BriefingField(
+        name="num_slides",
+        label="Nº de slides (3–8)",
+        kind="int",
+        required=False,
+        min_int=3,
+        max_int=8,
+        default="3",
+        help="Só pra formato carrossel.",
+    ),
+    BriefingField(
+        name="tema_especifico",
+        label="Evento ou pauta específica (opcional)",
+        kind="text",
+        required=False,
+        max_chars=500,
+        placeholder="ex.: Aldeia Veredas - sunset stage, sáb 12/07",
+    ),
+    BriefingField(
+        name="referencias",
+        label="Referências / observações (opcional)",
+        kind="textarea",
+        required=False,
+        max_chars=2000,
+        rows=2,
+        placeholder="lineup, parceiros, mood, restrições…",
+    ),
+)
+
 
 BRAND = Brand(
     nome="Gui Raw",
@@ -72,6 +150,26 @@ BRAND = Brand(
     ),
 
     approved_by="Gui Raw",
+
+    # Tema da UI: dark mode (preto profundo + branco) — combina com o
+    # contexto noturno/eventos do Gui e dá contraste forte das tipografias.
+    theme="dark",
+
+    # Logo typographic: sem PNG próprio ainda; o header exibe só o nome
+    # "Gui Raw" estilizado em Unbounded (vide google_fonts_url abaixo).
+    use_image_logo=False,
+
+    # Tipografia da central:
+    # - Unbounded (display geométrico, weight 700-800) pro nome do brand e
+    #   page titles — pegada funky/groove de capa de revista cultural.
+    # - Space Grotesk (sans contemporânea) pro body — limpa, lê bem em escuro.
+    google_fonts_url=(
+        "https://fonts.googleapis.com/css2?"
+        "family=Unbounded:wght@600;700;800&"
+        "family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    ),
+    ui_heading_font="'Unbounded', sans-serif",
+    ui_body_font="'Space Grotesk', sans-serif",
 
     # System prompt do Gui Raw — DJ/produtor multi-disciplinar. Atende eventos
     # do casamento ao psytrance. NOTA B.2: o user_message ainda interpola
@@ -134,4 +232,6 @@ Cada opção tem headlines, bodies e image_prompts nitidamente diferentes — nu
 
 A quantidade exata de slides será informada na mensagem do usuário. Sem texto antes ou depois. Sem markdown.\
 """,
+
+    briefing_fields=_GUI_BRIEFING_FIELDS,
 )

@@ -91,6 +91,12 @@ OPENAI_COPY_TEMPERATURE = 0.95
 IDEOGRAM_API_KEY = os.getenv("IDEOGRAM_API_KEY")
 IDEOGRAM_URL = "https://api.ideogram.ai/generate"
 
+# Equivalência em "tokens" para 1 imagem Ideogram, usada no contador unificado
+# exposto na UI. Origem: Ideogram V_2 ≈ US$ 0.08/imagem; gpt-4o output ≈
+# US$ 0.0125/1k tokens → ~6.000 tokens equivalentes. Ajustar aqui se o modelo
+# ou o fornecedor de imagem mudar.
+IMAGE_TOKEN_EQUIVALENT = 6000
+
 # Mock de imagens: usado quando NÃO há chave Ideogram, ou quando forçado.
 # Padrão: usar Ideogram real se houver chave. Defina USE_MOCK_IMAGES=true no
 # .env para forçar placeholders mesmo tendo a chave (debug/economia).
@@ -114,9 +120,9 @@ IDEOGRAM_CONFIG = {
 # Resolução da Ideogram por formato de post
 IDEOGRAM_RESOLUTIONS = {
     "square": "RESOLUTION_1024_1024",
-    "portrait": "RESOLUTION_1024_1280",
+    "portrait": "RESOLUTION_832_1024",  # V_2 NÃO aceita RESOLUTION_1024_1280 (retorna 400); 832x1024 ≈ 4:5. Composer reamostra pra 1080x1350.
     "carousel": "RESOLUTION_1024_1024",
-    "story": "RESOLUTION_720_1280",   # 9:16 nativo na V_2; composer faz upscale pra 1080x1920
+    "story": "ASPECT_9_16",           # V_2 não aceita RESOLUTION_720_1280; usar aspect_ratio. Composer reamostra pra 1080x1920.
 }
 
 # Sufixo anexado ao image_prompt — vem do brand atual. Texto NUNCA na imagem
@@ -127,8 +133,10 @@ IMAGE_PROMPT_SUFFIX = brand.image_prompt_suffix
 # --------------------------------------------------------------------------
 # Servidor de aprovação (Flask local)
 # --------------------------------------------------------------------------
-APPROVAL_HOST = "localhost"
-APPROVAL_PORT = 5000
+# Em produção (Fly.io / Docker) precisa escutar em 0.0.0.0 pra ser roteável
+# de fora do container. Default mantém localhost pra dev local seguro.
+APPROVAL_HOST = os.getenv("APPROVAL_HOST", "localhost")
+APPROVAL_PORT = int(os.getenv("APPROVAL_PORT", "5000"))
 
 # Nome de quem aprova (vai para os metadados de export) — vem do brand atual
 APPROVED_BY = brand.approved_by

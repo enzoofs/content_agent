@@ -36,10 +36,13 @@ class BriefingField:
     label: str                                # rótulo visível na UI ("Área do direito")
     kind: str                                 # "text" | "textarea" | "enum" | "int" | "date"
     required: bool = True
-    enum_values: tuple[str, ...] = ()         # apenas pra kind="enum"
+    enum_values: tuple[str, ...] = ()         # apenas pra kind="enum" — valores enviados ao backend
+    enum_labels: tuple[str, ...] = ()         # rótulos visíveis (mesmo índice de enum_values); vazio = usa values como labels
     max_chars: int | None = None              # cap pra kind in ("text","textarea")
     min_int: int | None = None                # bound pra kind="int"
     max_int: int | None = None                # bound pra kind="int"
+    rows: int = 2                             # linhas pra kind="textarea"
+    default: str = ""                         # valor inicial (pra enum: deve estar em enum_values)
     placeholder: str = ""                     # placeholder na UI
     help: str = ""                            # tooltip/descrição na UI
 
@@ -71,6 +74,31 @@ class Brand:
     # e regras específicas (advocacia vs DJ vs ...).
     system_prompt: str
     system_prompt_carousel: str
+
+    # --- A partir daqui, campos com default (Python exige essa ordem) ---
+
+    # Tema visual da UI da central (Fase B.1.2)
+    # "light" = paleta clara (cream/navy do M&V), "dark" = paleta escura
+    # (preto/branco do Gui). Controla overrides de --ink-X, --line-X etc
+    # injetados pelo server pra que labels/placeholders fiquem legíveis.
+    theme: str = "light"
+
+    # Logo do header da central:
+    # True  → renderiza <img src=brand.logo_path> no header
+    # False → omite a imagem e exibe só o nome do brand grande (typographic)
+    # Usado quando o brand não tem PNG próprio (Gui Raw, por exemplo).
+    use_image_logo: bool = True
+
+    # URL Google Fonts adicional pra carregar no <head> da central. Vazio = só
+    # carrega Playfair+Montserrat (fontes do M&V). Quando o brand define fontes
+    # display próprias (ex.: Unbounded pro Gui), seta a URL aqui.
+    google_fonts_url: str = ""
+
+    # CSS font-family que sobrescreve heading/body da central quando o brand
+    # quer trocar a tipografia (vazio = mantém defaults M&V).
+    # Ex.: ui_heading_font="'Unbounded', sans-serif".
+    ui_heading_font: str = ""
+    ui_body_font: str = ""
 
     # Briefing schema e formatadores de user message — Fase B.3.1
     # `briefing_fields` é a fonte da verdade do schema (parser valida contra

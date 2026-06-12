@@ -242,35 +242,11 @@ function renderNovo() {
   const fields = (BRAND && BRAND.briefing_fields) || [];
   const html = renderBriefingFieldsHtml(fields);
 
-  // Bloco de fundo customizado (M&V only). Permite o cliente enviar uma foto
-  // própria (escritório, time) no lugar da arte gerada pelo Ideogram, e
-  // opcionalmente esconder o overlay azul pra a foto aparecer sem filtro.
-  const isMV = !BRAND || !BRAND.slug || BRAND.slug === "mendes_vaz";
-  const uploadHtml = isMV ? `
-    <fieldset class="form-fieldset">
-      <legend>Fundo da imagem</legend>
-      <label>Origem do fundo
-        <select name="background_source" id="background-source">
-          <option value="ia" selected>Gerar com IA (Ideogram)</option>
-          <option value="upload">Enviar uma foto minha</option>
-        </select>
-      </label>
-      <label id="wrap-upload" class="hidden">Foto (PNG, JPG ou WEBP)
-        <input type="file" name="upload" id="upload-input" accept="image/png,image/jpeg,image/webp">
-        <small class="form-help">A mesma foto será usada nas 3 variações.</small>
-      </label>
-      <label>
-        <input type="checkbox" name="hide_overlay" value="1">
-        Esconder a sombra azul sobre a imagem
-      </label>
-    </fieldset>` : "";
-
   app().innerHTML = `
     <a class="back" href="#/">← Campanhas</a>
     <h1 class="page-title">Nova campanha</h1>
     <form id="form-novo" class="form">
       ${html}
-      ${uploadHtml}
       <div id="form-erro" class="form-erro hidden"></div>
       <div class="form-actions">
         <button type="submit" class="btn btn-approve" id="btn-gerar">Gerar campanha</button>
@@ -288,17 +264,6 @@ function renderNovo() {
   };
   if (formato) formato.addEventListener("change", sync);
   sync();
-
-  // Toggle do input de arquivo conforme origem (apenas M&V).
-  const bgSrc = document.getElementById("background-source");
-  const wrapUpload = document.getElementById("wrap-upload");
-  if (bgSrc && wrapUpload) {
-    const syncUpload = () => {
-      wrapUpload.classList.toggle("hidden", bgSrc.value !== "upload");
-    };
-    bgSrc.addEventListener("change", syncUpload);
-    syncUpload();
-  }
 
   document.getElementById("form-novo").addEventListener("submit", onSubmitNovo);
 }
@@ -462,35 +427,16 @@ async function onSubmitNovo(e) {
   btn.textContent = "Gerando…";
 
   const fd = new FormData(e.target);
-  const uploadInput = document.getElementById("upload-input");
-  const bgSrc = document.getElementById("background-source");
-  const usaUpload = bgSrc && bgSrc.value === "upload"
-                  && uploadInput && uploadInput.files && uploadInput.files.length > 0;
+  const body = Object.fromEntries(fd.entries());
+  if (body.formato !== "carousel") body.num_slides = 1;
+  else body.num_slides = parseInt(body.num_slides, 10);
 
-  let res;
   try {
-    if (usaUpload) {
-      // multipart: deixa o browser definir o Content-Type com boundary.
-      // hide_overlay vai como "1" quando checked; ausente quando não.
-      // Remove o campo background_source (uso só no front).
-      fd.delete("background_source");
-      const formato = fd.get("formato");
-      if (formato !== "carousel") fd.set("num_slides", "1");
-      res = await fetch("/api/campaigns", { method: "POST", body: fd });
-    } else {
-      const body = Object.fromEntries(fd.entries());
-      delete body.background_source;
-      delete body.upload;  // FormData entry vazia quando nenhum arquivo escolhido
-      if (body.formato !== "carousel") body.num_slides = 1;
-      else body.num_slides = parseInt(body.num_slides, 10);
-      // Checkbox hide_overlay vira "1" quando marcada; ausente quando não.
-      body.hide_overlay = body.hide_overlay === "1" ? 1 : 0;
-      res = await fetch("/api/campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    }
+    const res = await fetch("/api/campaigns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.erro || "Falha ao criar campanha");
     location.hash = `#/campanha/${encodeURIComponent(data.campaign_id)}`;

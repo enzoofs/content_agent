@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from config import settings
 from modules import (
     campaign_store,
     composer,
@@ -41,7 +42,26 @@ def gerar(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[Path]:
         copy_options = copy_generator.generate(briefing, nota_ajuste, versao=versao)
 
         campaign_store.set_etapa(cid, "arte")
-        image_paths = image_generator.generate(copy_options, briefing["formato"], cid)
+        # Se o operador enviou uma foto, ela vira o fundo das 3 opções
+        # (e de todos os slides do carrossel) — Ideogram é pulado.
+        upload_name = (briefing.get("upload_filename") or "").strip()
+        upload_path = None
+        if upload_name:
+            candidato = settings.CAMPAIGNS_DIR / cid / upload_name
+            if candidato.exists():
+                upload_path = candidato
+            else:
+                utils.log(cid, f"pipeline: upload_filename={upload_name!r} não encontrado, caindo pra Ideogram.")
+        # Só passa upload_path como kwarg quando setado, pra não quebrar mocks de
+        # testes que monkey-patcham image_generator.generate sem esse parâmetro.
+        if upload_path is not None:
+            image_paths = image_generator.generate(
+                copy_options, briefing["formato"], cid, upload_path=upload_path,
+            )
+        else:
+            image_paths = image_generator.generate(
+                copy_options, briefing["formato"], cid,
+            )
 
         campaign_store.set_etapa(cid, "composicao")
         composed = composer.compose_all(copy_options, image_paths, briefing)
