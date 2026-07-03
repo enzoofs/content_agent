@@ -262,7 +262,7 @@ def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[dic
         else _build_user_message(briefing, nota_ajuste)
     )
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = OpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL)
 
     ultima_excecao: Exception | None = None
     # 1 tentativa + até 2 retentativas (total 3)

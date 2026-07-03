@@ -74,7 +74,10 @@ FONTS = brand.fonts
 # Geração de copy — OpenAI (substitui a Claude API nesta fase)
 # --------------------------------------------------------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = "gpt-4o"        # configurável; troca-se aqui sem tocar nos módulos
+OPENAI_MODEL = "deepseek-chat"  # configurável; troca-se aqui sem tocar nos módulos
+# Se vazio, usa o endpoint oficial da OpenAI. A API da DeepSeek é compatível
+# com o SDK da OpenAI — só troca base_url + modelo (ver .env.example).
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL") or None
 COPY_MAX_TOKENS = 2000
 
 # Quantas variações de copy geramos por campanha
