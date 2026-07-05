@@ -172,6 +172,27 @@ body {
 }
 
 .topnav { display: flex; align-items: center; gap: var(--space-6); }
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: var(--space-6);
+}
+.admin-brand-select {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-medium);
+  background: var(--surface-1);
+  color: var(--ink-1);
+}
+.escolha-brand-opcoes {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: center;
+  margin-top: var(--space-4);
+}
 .navlink {
   position: relative;
   color: rgba(255,255,255,0.85);

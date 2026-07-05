@@ -1,11 +1,13 @@
 """
-modules/image_generator.py — Geração de arte de fundo via Ideogram.
+modules/image_generator.py — Geração de arte de fundo via Ideogram ou Pollinations.ai.
 
 Gera uma imagem de fundo (SEM texto, SEM logo) para cada variação de copy.
 O texto e o logo são adicionados depois pelo composer.
 
-Enquanto não houver IDEOGRAM_API_KEY (ou USE_MOCK_IMAGES=true), gera imagens
-placeholder navy/gold localmente via Pillow, para o pipeline rodar fim a fim.
+O provedor é escolhido por settings.IMAGE_PROVIDER ("ideogram" ou
+"pollinations"). Enquanto não houver credencial (ou USE_MOCK_IMAGES=true),
+gera imagens placeholder navy/gold localmente via Pillow, para o pipeline
+rodar fim a fim.
 
 REGRA CRÍTICA: nunca quebra o pipeline por causa de uma imagem. Após 3 falhas
 numa opção, registra no log e cai para o placeholder.
@@ -15,6 +17,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from PIL import Image, ImageDraw
@@ -25,7 +28,7 @@ from modules import campaign_store, utils
 
 def generate(
     copy_options: list[dict], formato: str, campaign_id: str,
-    upload_path: Path | None = None,
+    brand=None, upload_path: Path | None = None,
 ) -> list[Path] | list[list[Path]]:
     """
     Gera as imagens de fundo das variações de copy.
@@ -34,6 +37,9 @@ def generate(
         copy_options: saída de copy_generator.generate.
         formato: "square" | "portrait" | "carousel".
         campaign_id: id da campanha (define a pasta de saída).
+        brand: brand da campanha (sufixo de prompt, negative prompt, cores do
+            placeholder variam por cliente). None usa settings.brand
+            (fallback seguro pro fluxo terminal/testes).
         upload_path: foto enviada pelo operador. Quando setado, pula Ideogram
             inteiramente e usa essa mesma foto pras 3 opções (incluindo todos
             os slides do carrossel). Útil pra fotos do próprio escritório /
@@ -47,11 +53,12 @@ def generate(
         - simples: option_{n}.png
         - carrossel: option_{n}_slide_{m}.png
     """
+    brand = brand or settings.brand
     out_dir = utils.campaign_images_dir(campaign_id)
     size = settings.POST_SIZES[formato]
 
     if formato == "carousel":
-        return _generate_carousel(copy_options, formato, size, out_dir, campaign_id, upload_path)
+        return _generate_carousel(copy_options, formato, size, out_dir, campaign_id, brand, upload_path)
 
     paths: list[Path] = []
     for copy in copy_options:
@@ -60,8 +67,8 @@ def generate(
         if upload_path is not None:
             _usar_upload(upload_path, destino, size, campaign_id, n)
         else:
-            prompt = _build_prompt(copy["image_prompt"])
-            _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n)
+            prompt = _build_prompt(copy["image_prompt"], brand)
+            _generate_one(prompt, destino, size, formato, campaign_id, n, brand, seed=n)
         paths.append(destino)
     return paths
 
@@ -72,6 +79,7 @@ def _generate_carousel(
     size: tuple[int, int],
     out_dir: Path,
     campaign_id: str,
+    brand,
     upload_path: Path | None = None,
 ) -> list[list[Path]]:
     """Gera N imagens por opção (uma por slide) e devolve a estrutura aninhada."""
@@ -85,9 +93,9 @@ def _generate_carousel(
             if upload_path is not None:
                 _usar_upload(upload_path, destino, size, campaign_id, n, slide_id=m)
             else:
-                prompt = _build_prompt(slide["image_prompt"])
+                prompt = _build_prompt(slide["image_prompt"], brand)
                 # seed combina opção e slide para variar o brilho do placeholder
-                _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n * 10 + m)
+                _generate_one(prompt, destino, size, formato, campaign_id, n, brand, seed=n * 10 + m)
             slides_paths.append(destino)
         todas.append(slides_paths)
     return todas
@@ -118,45 +126,50 @@ def _usar_upload(
 
 def _generate_one(
     prompt: str, destino: Path, size: tuple[int, int],
-    formato: str, campaign_id: str, n: int, seed: int,
+    formato: str, campaign_id: str, n: int, brand, seed: int,
 ) -> None:
     """Gera UMA imagem (mock ou Ideogram com fallback)."""
     if settings.USE_MOCK_IMAGES:
         utils.log(campaign_id, f"image_generator: {destino.name} usando placeholder (mock).")
-        _generate_mock_image(prompt, destino, size, seed=seed)
+        _generate_mock_image(prompt, destino, size, brand, seed=seed)
     else:
-        _generate_with_fallback(prompt, destino, size, formato, campaign_id, n)
+        _generate_with_fallback(prompt, destino, size, formato, campaign_id, n, brand)
 
 
-def _build_prompt(image_prompt: str) -> str:
+def _build_prompt(image_prompt: str, brand) -> str:
     """Enriquece o prompt do copy com o sufixo de estética do cliente."""
-    return f"{image_prompt}, {settings.IMAGE_PROMPT_SUFFIX}"
+    return f"{image_prompt}, {brand.image_prompt_suffix}"
 
 
 def _generate_with_fallback(
     prompt: str, destino: Path, size: tuple[int, int],
-    formato: str, campaign_id: str, n: int,
+    formato: str, campaign_id: str, n: int, brand,
 ) -> None:
-    """Tenta a Ideogram até 3x; se falhar, cai para o placeholder local."""
+    """Tenta o provedor configurado (settings.IMAGE_PROVIDER) até 3x; se falhar, cai para o placeholder local."""
+    provider = settings.IMAGE_PROVIDER
+
     for tentativa in range(1, 4):
         try:
-            _generate_with_ideogram(prompt, destino, formato)
-            utils.log(campaign_id, f"image_generator: opção {n} gerada via Ideogram.")
+            if provider == "ideogram":
+                _generate_with_ideogram(prompt, destino, formato, brand)
+            else:
+                _generate_with_pollinations(prompt, destino, formato)
+            utils.log(campaign_id, f"image_generator: opção {n} gerada via {provider}.")
             campaign_store.add_tokens(campaign_id, settings.IMAGE_TOKEN_EQUIVALENT)
             return
         except Exception as e:
             utils.log(
                 campaign_id,
-                f"image_generator: Ideogram falhou opção {n} tentativa {tentativa}: {e}",
+                f"image_generator: {provider} falhou opção {n} tentativa {tentativa}: {e}",
             )
-            print(f"⚠️  Ideogram falhou (opção {n}, tentativa {tentativa}): {e}")
+            print(f"⚠️  {provider} falhou (opção {n}, tentativa {tentativa}): {e}")
 
     utils.log(campaign_id, f"image_generator: opção {n} caiu para placeholder após 3 falhas.")
     print(f"   → Usando placeholder local para a opção {n}.")
-    _generate_mock_image(prompt, destino, size, seed=n)
+    _generate_mock_image(prompt, destino, size, brand, seed=n)
 
 
-def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
+def _generate_with_ideogram(prompt: str, destino: Path, formato: str, brand) -> None:
     """
     Chama a Ideogram API, baixa o PNG resultante e salva em `destino`.
 
@@ -175,7 +188,7 @@ def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
             "model": settings.IDEOGRAM_CONFIG["model"],
             size_key: ratio_or_res,
             "style_type": settings.IDEOGRAM_CONFIG["style_type"],
-            "negative_prompt": settings.IDEOGRAM_CONFIG["negative_prompt"],
+            "negative_prompt": brand.ideogram_negative_prompt,
         }
     }
     if "color_palette" in settings.IDEOGRAM_CONFIG:
@@ -200,6 +213,30 @@ def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
     _resize_to_post(destino, settings.POST_SIZES[formato])
 
 
+def _generate_with_pollinations(prompt: str, destino: Path, formato: str) -> None:
+    """
+    Chama a Pollinations.ai (gratuita, sem API key), baixa o PNG e salva em `destino`.
+
+    Raises:
+        Exception: em qualquer falha de rede ou resposta inesperada.
+    """
+    w, h = settings.POST_SIZES[formato]
+    url = f"{settings.POLLINATIONS_URL}/{quote(prompt)}"
+    params = {
+        "width": w,
+        "height": h,
+        "model": settings.POLLINATIONS_MODEL,
+        "nologo": "true",
+    }
+    resp = requests.get(url, params=params, timeout=120)
+    if not resp.ok:
+        raise RuntimeError(f"Pollinations {resp.status_code}: {resp.text[:300]}")
+    destino.write_bytes(resp.content)
+
+    # Reamostra pro tamanho exato (a API às vezes entrega dimensões aproximadas)
+    _resize_to_post(destino, (w, h))
+
+
 def _resize_to_post(path: Path, size: tuple[int, int]) -> None:
     """Reamostra a imagem para o tamanho exato do post, recortando o excesso (cover)."""
     with Image.open(path) as img:
@@ -213,7 +250,7 @@ def _resize_to_post(path: Path, size: tuple[int, int]) -> None:
 
 
 def _generate_mock_image(
-    prompt: str, output_path: Path, size: tuple[int, int], seed: int = 1
+    prompt: str, output_path: Path, size: tuple[int, int], brand, seed: int = 1
 ) -> Path:
     """
     Gera um placeholder elegante navy com um brilho dourado sutil.
@@ -222,9 +259,9 @@ def _generate_mock_image(
     enquanto a chave Ideogram não está disponível. Sem texto na imagem.
     """
     w, h = size
-    navy = _hex_rgb(settings.COLORS["navy_dark"])
-    navy_top = _hex_rgb(settings.COLORS["navy"])
-    gold = _hex_rgb(settings.COLORS["gold"])
+    navy = _hex_rgb(brand.colors["navy_dark"])
+    navy_top = _hex_rgb(brand.colors["navy"])
+    gold = _hex_rgb(brand.colors["gold"])
 
     img = Image.new("RGB", (w, h), navy)
     px = img.load()

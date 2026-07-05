@@ -77,16 +77,23 @@ def write_state(campaign_id: str, **campos) -> dict:
             },
             status=campos.get("status", "gerando"),
             etapa=campos.get("etapa", "copy"),
+            brand_slug="mendes_vaz",
         )
     return store.update_campaign(campaign_id, **campos)
 
 
-def criar(briefing: dict) -> dict:
+def criar(briefing: dict, brand_slug: str = "mendes_vaz") -> dict:
     """
     Cria a campanha no DB com (status=gerando, etapa=copy, copy_version=1).
+
+    Args:
+        brand_slug: brand dono da campanha. Default transicional
+            "mendes_vaz" preserva as chamadas existentes (testes, main.py
+            terminal); `server.py` passa o brand da sessão explicitamente
+            a partir do PR2.
     """
     store.init_schema()  # garante schema na 1ª chamada (testes/fluxos isolados)
-    return store.insert_campaign(briefing, status="gerando", etapa="copy")
+    return store.insert_campaign(briefing, status="gerando", etapa="copy", brand_slug=brand_slug)
 
 
 def set_etapa(campaign_id: str, etapa: str) -> None:
@@ -167,15 +174,19 @@ def deletar(campaign_id: str) -> bool:
     return apagada
 
 
-def listar() -> list[dict]:
+def listar(brand_slug: str | None = None) -> list[dict]:
     """
-    Lista todas as campanhas (mais recentes primeiro), com o briefing aninhado.
+    Lista campanhas (mais recentes primeiro), com o briefing aninhado.
+
+    Args:
+        brand_slug: filtra por brand. None = sem filtro (mantido pra
+            compat até o wiring de auth em PR2 passar o brand da sessão).
 
     O formato {**estado, "briefing": briefing} é mantido para preservar o
     contrato com o dashboard da UI.
     """
     resultado: list[dict] = []
-    for campanha in store.list_campaigns():
+    for campanha in store.list_campaigns(brand_slug=brand_slug):
         briefing = {
             "campaign_id": campanha["campaign_id"],
             "area_direito": campanha["area_direito"],
@@ -212,6 +223,7 @@ def read_briefing(campaign_id: str) -> dict | None:
         "created_at": c["created_at"],
         "hide_overlay": int(c["hide_overlay"] or 0) if "hide_overlay" in c.keys() else 0,
         "upload_filename": (c["upload_filename"] or "") if "upload_filename" in c.keys() else "",
+        "brand_slug": c["brand_slug"] if "brand_slug" in c.keys() else "mendes_vaz",
     }
 
 

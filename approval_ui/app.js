@@ -4,14 +4,43 @@
 let pollTimer = null;
 let calRef = null; // primeiro dia do mês exibido no calendário
 let BRAND = null; // metadata do brand ativo (carregado em loadBrand no boot)
+let ME = null; // usuário logado (email, role, brand_slug, available_brands)
+
+// Wrap global fetch: qualquer 401 (sessão expirada/ausente) manda pro login.
+// Cobre fetchJSON() e todas as chamadas fetch() diretas (POST/DELETE) sem
+// precisar tocar em cada call site individualmente.
+const _fetchOriginal = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const res = await _fetchOriginal(...args);
+  if (res.status === 401) {
+    location.href = "/login";
+  }
+  return res;
+};
 
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", async () => {
   setupModal();
   setupTopbar();
+  await loadMe();
   await loadBrand();
-  route();
+  renderTopbarActions();
+  if (ME && ME.role === "admin" && !ME.brand_slug) {
+    renderEscolhaBrand();
+  } else {
+    route();
+  }
 });
+
+// Carrega o usuário logado uma vez no boot — define role/brand_slug/available_brands.
+async function loadMe() {
+  try {
+    ME = await fetchJSON("/api/me");
+  } catch (e) {
+    console.error("Falha ao carregar usuário:", e);
+    ME = { email: "", role: "cliente", brand_slug: null, available_brands: [] };
+  }
+}
 
 // Carrega metadata do brand uma vez no boot. A UI usa BRAND.briefing_fields
 // pra renderizar o form de nova campanha. Em caso de falha, segue com schema
@@ -23,6 +52,66 @@ async function loadBrand() {
     console.error("Falha ao carregar brand:", e);
     BRAND = { briefing_fields: [] };
   }
+}
+
+// Botão "Sair" (todo mundo) + seletor de brand (só admin) na topbar.
+function renderTopbarActions() {
+  const el = document.getElementById("topbar-actions");
+  if (!el || !ME) return;
+
+  let seletorHtml = "";
+  if (ME.role === "admin") {
+    const opcoes = ME.available_brands.map(slug => {
+      const sel = slug === ME.brand_slug ? "selected" : "";
+      return `<option value="${escapeHtml(slug)}" ${sel}>${escapeHtml(slug)}</option>`;
+    }).join("");
+    seletorHtml = `<select id="admin-brand-select" class="admin-brand-select">
+      <option value="">Escolher brand…</option>${opcoes}
+    </select>`;
+  }
+
+  el.innerHTML = `${seletorHtml}<button class="btn btn-adjust" id="btn-logout">Sair</button>`;
+
+  document.getElementById("btn-logout").addEventListener("click", async () => {
+    await fetch("/logout", { method: "POST" });
+    location.href = "/login";
+  });
+
+  const select = document.getElementById("admin-brand-select");
+  if (select) {
+    select.addEventListener("change", async () => {
+      if (!select.value) return;
+      await fetch("/api/admin/brand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: select.value }),
+      });
+      location.reload();
+    });
+  }
+}
+
+// Tela neutra pro admin escolher um brand antes de ver qualquer campanha —
+// sem default silencioso (evita confundir qual brand está ativo).
+function renderEscolhaBrand() {
+  const opcoes = (ME.available_brands || []).map(slug =>
+    `<button class="btn btn-approve" data-slug="${escapeHtml(slug)}">${escapeHtml(slug)}</button>`
+  ).join("");
+  app().innerHTML = `
+    <div class="empty">
+      <p>Escolha um brand pra continuar:</p>
+      <div class="escolha-brand-opcoes">${opcoes}</div>
+    </div>`;
+  app().querySelectorAll("[data-slug]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await fetch("/api/admin/brand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: btn.dataset.slug }),
+      });
+      location.reload();
+    });
+  });
 }
 
 // Spotlight gold seguindo o cursor na topbar — luz oblíqua editorial.
@@ -243,7 +332,7 @@ function renderNovo() {
   const html = renderBriefingFieldsHtml(fields);
 
   // Bloco de fundo customizado (M&V only). Permite o cliente enviar uma foto
-  // própria (escritório, time) no lugar da arte gerada pelo Ideogram, e
+  // própria (escritório, time) no lugar da arte gerada por IA, e
   // opcionalmente esconder o overlay azul pra a foto aparecer sem filtro.
   const isMV = !BRAND || !BRAND.slug || BRAND.slug === "mendes_vaz";
   const uploadHtml = isMV ? `
@@ -251,7 +340,7 @@ function renderNovo() {
       <legend>Fundo da imagem</legend>
       <label>Origem do fundo
         <select name="background_source" id="background-source">
-          <option value="ia" selected>Gerar com IA (Ideogram)</option>
+          <option value="ia" selected>Gerar com IA</option>
           <option value="upload">Enviar uma foto minha</option>
         </select>
       </label>
@@ -544,7 +633,7 @@ function startPolling(id) {
 // ---------- Progresso ----------
 const ETAPAS = [
   ["copy", "Gerando textos (copy)"],
-  ["arte", "Gerando arte (Ideogram)"],
+  ["arte", "Gerando arte"],
   ["composicao", "Compondo os posts"],
 ];
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from config import settings
+from config import brands, settings
 from modules import (
     campaign_store,
     composer,
@@ -37,9 +37,13 @@ def gerar(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[Path]:
         Lista de paths dos PNGs compostos.
     """
     cid = briefing["campaign_id"]
+    # Brand persistido na campanha — recarregado fresco aqui porque esta função
+    # roda numa thread daemon separada da request (server.py._iniciar_geracao_async),
+    # e o g.brand do Flask não sobrevive fora da thread da request.
+    brand = brands.load(briefing.get("brand_slug") or "mendes_vaz")
     try:
         campaign_store.set_etapa(cid, "copy")
-        copy_options = copy_generator.generate(briefing, nota_ajuste, versao=versao)
+        copy_options = copy_generator.generate(briefing, nota_ajuste, versao=versao, brand=brand)
 
         campaign_store.set_etapa(cid, "arte")
         # Se o operador enviou uma foto, ela vira o fundo das 3 opções
@@ -56,15 +60,15 @@ def gerar(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[Path]:
         # testes que monkey-patcham image_generator.generate sem esse parâmetro.
         if upload_path is not None:
             image_paths = image_generator.generate(
-                copy_options, briefing["formato"], cid, upload_path=upload_path,
+                copy_options, briefing["formato"], cid, brand=brand, upload_path=upload_path,
             )
         else:
             image_paths = image_generator.generate(
-                copy_options, briefing["formato"], cid,
+                copy_options, briefing["formato"], cid, brand=brand,
             )
 
         campaign_store.set_etapa(cid, "composicao")
-        composed = composer.compose_all(copy_options, image_paths, briefing)
+        composed = composer.compose_all(copy_options, image_paths, briefing, brand=brand)
 
         campaign_store.marcar_aguardando(cid)
         utils.log(cid, "pipeline: geração concluída — aguardando aprovação.")

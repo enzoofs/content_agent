@@ -61,14 +61,18 @@ def _classifica(atual: int, limite: int) -> str:
     return "ok"
 
 
-def snapshot() -> QuotaSnapshot:
+def snapshot(brand_slug: str | None = None) -> QuotaSnapshot:
     """
     Lê as contagens correntes e devolve o estado de todas as quotas pra UI.
+
+    Args:
+        brand_slug: brand cujas quotas serão calculadas. None = contagem
+            global (compat com chamadas anteriores ao login multi-tenant).
 
     Usado no GET /api/quotas (mostra banner) e no POST /api/campaigns
     (decisão de bloqueio antes de criar).
     """
-    counts = store.quota_counts()
+    counts = store.quota_counts(brand_slug)
     itens: list[QuotaEstado] = []
     bloqueado = False
 
@@ -107,14 +111,17 @@ class QuotaExcedidaError(Exception):
         self.mensagem = mensagem
 
 
-def verificar_pode_criar() -> None:
+def verificar_pode_criar(brand_slug: str | None = None) -> None:
     """
     Garante que o usuário pode criar UMA nova campanha agora.
 
+    Args:
+        brand_slug: brand cujas quotas serão checadas. None = quota global.
+
     Raises:
-        QuotaExcedidaError: se qualquer quota global estiver em 'block'.
+        QuotaExcedidaError: se qualquer quota do brand estiver em 'block'.
     """
-    snap = snapshot()
+    snap = snapshot(brand_slug)
     if not snap["bloqueado"]:
         return
     # Pega o primeiro item bloqueado pra mensagem clara

@@ -1,6 +1,6 @@
 @echo off
 REM ==========================================================================
-REM start-reuniao.bat - Sobe tudo que precisa pra demo numa tacada so.
+REM start.bat - Sobe tudo que precisa pra demo numa tacada so.
 REM   1) Servidor Flask em http://localhost:5000  (janela "content_agent")
 REM   2) Tunel ngrok publico                       (janela "ngrok")
 REM   3) Abre o navegador na UI local
@@ -23,7 +23,7 @@ if not exist "venv\Scripts\python.exe" (
 )
 
 echo [1/3] Subindo servidor Flask em nova janela...
-start "content_agent server" cmd /k "call venv\Scripts\activate.bat && python main.py --serve"
+start "content_agent server" cmd /k "call venv\Scripts\activate.bat && set PYTHONIOENCODING=utf-8 && python main.py --serve"
 
 echo [2/3] Subindo tunel ngrok em nova janela...
 start "ngrok tunnel" cmd /k "ngrok http 5000"
