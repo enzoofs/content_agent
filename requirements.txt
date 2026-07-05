@@ -8,6 +8,9 @@ requests>=2.31.0
 # Servidor local da interface de aprovação
 flask>=3.0.0
 
+# Login/sessão por usuário (brand determinado por quem loga)
+flask-login>=0.6.3
+
 # WSGI de produção (cross-platform: Windows + Linux) — substitui o werkzeug
 # make_server, que o próprio werkzeug avisa "not for production use".
 waitress>=3.0.0

@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
     atualizado_em         TEXT    NOT NULL,
     tokens_used           INTEGER NOT NULL DEFAULT 0,
     hide_overlay          INTEGER NOT NULL DEFAULT 0,
-    upload_filename       TEXT
+    upload_filename       TEXT,
+    brand_slug            TEXT    NOT NULL DEFAULT 'mendes_vaz'
 );
 
 CREATE TABLE IF NOT EXISTS copy_versions (
@@ -72,12 +73,16 @@ CREATE TABLE IF NOT EXISTS copy_versions (
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_campaigns_data_agendada ON campaigns(data_agendada);
+CREATE INDEX IF NOT EXISTS idx_campaigns_brand_slug ON campaigns(brand_slug);
+CREATE INDEX IF NOT EXISTS idx_campaigns_brand_status ON campaigns(brand_slug, status);
 
 -- Templates de briefing: preset reutilizável para acelerar criação de campanhas.
 -- Guarda apenas os campos do briefing — não vira campanha sozinho.
+-- nome é único POR BRAND (dois clientes podem ter um template com o mesmo nome).
 CREATE TABLE IF NOT EXISTS briefing_templates (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome                  TEXT    NOT NULL UNIQUE,
+    nome                  TEXT    NOT NULL,
+    brand_slug            TEXT    NOT NULL DEFAULT 'mendes_vaz',
     area_direito          TEXT    NOT NULL DEFAULT '',
     perfil_cliente_ideal  TEXT    NOT NULL DEFAULT '',
     tom                   TEXT    NOT NULL DEFAULT 'tecnico',
@@ -86,11 +91,23 @@ CREATE TABLE IF NOT EXISTS briefing_templates (
     num_slides            INTEGER NOT NULL DEFAULT 1,
     tema_especifico       TEXT    NOT NULL DEFAULT '',
     referencias           TEXT    NOT NULL DEFAULT '',
-    created_at            TEXT    NOT NULL
+    created_at            TEXT    NOT NULL,
+    UNIQUE(brand_slug, nome)
+);
+
+-- Usuários de login. brand_slug é NULL só pra role='admin' (enxerga todos os brands).
+CREATE TABLE IF NOT EXISTS users (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT    NOT NULL UNIQUE,
+    senha_hash  TEXT    NOT NULL,
+    brand_slug  TEXT,
+    role        TEXT    NOT NULL DEFAULT 'cliente',
+    created_at  TEXT    NOT NULL
 );
 """
 
-# Colunas editáveis de briefing_templates (id e created_at são geridos pelo DB).
+# Colunas editáveis de briefing_templates (id e created_at são geridos pelo DB;
+# brand_slug é setado pelo servidor a partir da sessão, nunca vem do cliente).
 TEMPLATE_FIELDS = (
     "nome", "area_direito", "perfil_cliente_ideal", "tom", "objetivo",
     "formato", "num_slides", "tema_especifico", "referencias",
@@ -102,7 +119,7 @@ CAMPAIGN_COLUMNS = (
     "tema_especifico", "formato", "num_slides", "referencias", "created_at",
     "status", "etapa", "copy_version", "option_aprovada", "data_agendada",
     "erro", "atualizado_em", "tokens_used",
-    "hide_overlay", "upload_filename",
+    "hide_overlay", "upload_filename", "brand_slug",
 )
 
 
@@ -135,7 +152,7 @@ def init_db() -> None:
     """Cria tabelas e índices se não existirem. Idempotente."""
     with connect() as con:
         con.executescript(SCHEMA_SQL)
-        # Migration idempotente: adiciona tokens_used em DBs antigos.
+        # Migration idempotente: adiciona colunas novas em DBs antigos.
         cols = {r["name"] for r in con.execute("PRAGMA table_info(campaigns)").fetchall()}
         if "tokens_used" not in cols:
             con.execute(
@@ -148,6 +165,22 @@ def init_db() -> None:
         if "upload_filename" not in cols:
             con.execute(
                 "ALTER TABLE campaigns ADD COLUMN upload_filename TEXT"
+            )
+        if "brand_slug" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN brand_slug TEXT NOT NULL DEFAULT 'mendes_vaz'"
+            )
+
+        # briefing_templates: DBs antigos ganham a coluna, mas o SQLite não
+        # permite ALTER TABLE pra trocar a constraint UNIQUE(nome) existente
+        # por UNIQUE(brand_slug, nome) sem recriar a tabela. Como só existe
+        # 1 brand em produção hoje, isso é um gap de baixo risco documentado
+        # aqui — só viraria problema se dois brands quisessem um template
+        # com o MESMO nome num DB que já existia antes desta migration.
+        tpl_cols = {r["name"] for r in con.execute("PRAGMA table_info(briefing_templates)").fetchall()}
+        if "brand_slug" not in tpl_cols:
+            con.execute(
+                "ALTER TABLE briefing_templates ADD COLUMN brand_slug TEXT NOT NULL DEFAULT 'mendes_vaz'"
             )
 
 
@@ -163,13 +196,19 @@ def _row_to_state(row: sqlite3.Row) -> dict:
     return {k: row[k] for k in row.keys()}
 
 
-def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy") -> dict:
+def insert_campaign(
+    briefing: dict, status: str = "gerando", etapa: str = "copy",
+    *, brand_slug: str,
+) -> dict:
     """
     Cria registro de campanha a partir do briefing validado.
 
     Args:
         briefing: saída de briefing_parser.parse.
         status, etapa: estado inicial (padrão: gerando/copy).
+        brand_slug: brand dono da campanha. Sempre derivado server-side da
+            sessão do usuário logado (nunca do corpo da requisição) — é a
+            fronteira de isolamento entre clientes.
 
     Returns:
         Estado completo da campanha.
@@ -200,6 +239,7 @@ def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy"
         "tokens_used": 0,
         "hide_overlay": int(briefing.get("hide_overlay") or 0),
         "upload_filename": briefing.get("upload_filename") or None,
+        "brand_slug": brand_slug,
     }
     cols = ", ".join(CAMPAIGN_COLUMNS)
     placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -270,12 +310,26 @@ def delete_campaign(campaign_id: str) -> bool:
     return cur.rowcount > 0
 
 
-def list_campaigns() -> list[dict]:
-    """Lista todas as campanhas, mais recentes primeiro (por created_at desc)."""
+def list_campaigns(brand_slug: str | None = None) -> list[dict]:
+    """
+    Lista campanhas, mais recentes primeiro (por created_at desc).
+
+    Args:
+        brand_slug: filtra por brand. None = sem filtro (visão "todos os
+            brands" do admin) — mantido opcional pra não quebrar chamadas
+            existentes antes do wiring de auth (PR2).
+    """
     with connect() as con:
-        rows = con.execute(
-            "SELECT * FROM campaigns ORDER BY created_at DESC, campaign_id DESC"
-        ).fetchall()
+        if brand_slug is None:
+            rows = con.execute(
+                "SELECT * FROM campaigns ORDER BY created_at DESC, campaign_id DESC"
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT * FROM campaigns WHERE brand_slug = ? "
+                "ORDER BY created_at DESC, campaign_id DESC",
+                (brand_slug,),
+            ).fetchall()
     return [_row_to_state(r) for r in rows]
 
 
@@ -399,6 +453,8 @@ def migrate_from_files() -> dict:
             "tokens_used": int(state.get("tokens_used", 0) or 0),
             "hide_overlay": int(state.get("hide_overlay", 0) or 0),
             "upload_filename": state.get("upload_filename") or None,
+            # Importador legado: só existia 1 brand (M&V) na época desses arquivos.
+            "brand_slug": "mendes_vaz",
         }
         cols = ", ".join(CAMPAIGN_COLUMNS)
         placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -429,12 +485,25 @@ def _row_to_template(row: sqlite3.Row) -> dict:
     return {k: row[k] for k in row.keys()}
 
 
-def list_templates() -> list[dict]:
-    """Lista todos os templates em ordem alfabética por nome."""
+def list_templates(brand_slug: str | None = None) -> list[dict]:
+    """
+    Lista templates em ordem alfabética por nome.
+
+    Args:
+        brand_slug: filtra por brand. None = sem filtro — opcional pra não
+            quebrar chamadas existentes antes do wiring de auth (PR2).
+    """
     with connect() as con:
-        rows = con.execute(
-            "SELECT * FROM briefing_templates ORDER BY nome COLLATE NOCASE"
-        ).fetchall()
+        if brand_slug is None:
+            rows = con.execute(
+                "SELECT * FROM briefing_templates ORDER BY nome COLLATE NOCASE"
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT * FROM briefing_templates WHERE brand_slug = ? "
+                "ORDER BY nome COLLATE NOCASE",
+                (brand_slug,),
+            ).fetchall()
     return [_row_to_template(r) for r in rows]
 
 
@@ -447,13 +516,16 @@ def get_template(template_id: int) -> dict | None:
     return _row_to_template(row) if row else None
 
 
-def save_template(nome: str, dados: dict) -> dict:
+def save_template(nome: str, dados: dict, brand_slug: str = "mendes_vaz") -> dict:
     """
-    Cria ou atualiza um template (UPSERT por nome — case-sensitive).
+    Cria ou atualiza um template (UPSERT por (brand_slug, nome) — case-sensitive).
 
     Args:
-        nome: nome único do template.
+        nome: nome do template (único dentro do brand).
         dados: dicionário com chaves de TEMPLATE_FIELDS (exceto 'nome').
+        brand_slug: brand dono do template — sempre derivado server-side da
+            sessão, nunca de `dados` (mantém default pra não quebrar
+            chamadas existentes antes do wiring de auth em PR2).
 
     Returns:
         Template recém-salvo (com id e created_at).
@@ -468,6 +540,7 @@ def save_template(nome: str, dados: dict) -> dict:
 
     valores = {
         "nome": nome,
+        "brand_slug": brand_slug,
         "area_direito": dados.get("area_direito", "") or "",
         "perfil_cliente_ideal": dados.get("perfil_cliente_ideal", "") or "",
         "tom": dados.get("tom", "tecnico") or "tecnico",
@@ -481,37 +554,57 @@ def save_template(nome: str, dados: dict) -> dict:
     cols = ", ".join(valores.keys())
     placeholders = ", ".join(f":{c}" for c in valores)
     update_set = ", ".join(
-        f"{c} = excluded.{c}" for c in valores if c not in ("nome", "created_at")
+        f"{c} = excluded.{c}" for c in valores
+        if c not in ("nome", "brand_slug", "created_at")
     )
     with connect() as con:
         con.execute(
             f"""
             INSERT INTO briefing_templates ({cols}) VALUES ({placeholders})
-            ON CONFLICT(nome) DO UPDATE SET {update_set}
+            ON CONFLICT(brand_slug, nome) DO UPDATE SET {update_set}
             """,
             valores,
         )
         row = con.execute(
-            "SELECT * FROM briefing_templates WHERE nome = ?", (nome,)
+            "SELECT * FROM briefing_templates WHERE brand_slug = ? AND nome = ?",
+            (brand_slug, nome),
         ).fetchone()
     return _row_to_template(row)
 
 
-def delete_template(template_id: int) -> bool:
-    """Apaga um template por id. Retorna True se algo foi apagado."""
+def delete_template(template_id: int, brand_slug: str | None = None) -> bool:
+    """
+    Apaga um template por id. Retorna True se algo foi apagado.
+
+    Args:
+        brand_slug: se informado, só apaga se o template pertencer a esse
+            brand (evita um cliente apagar template de outro por id direto).
+            None = sem checagem de posse (compat pré-PR2).
+    """
     with connect() as con:
-        cur = con.execute(
-            "DELETE FROM briefing_templates WHERE id = ?", (template_id,)
-        )
+        if brand_slug is None:
+            cur = con.execute(
+                "DELETE FROM briefing_templates WHERE id = ?", (template_id,)
+            )
+        else:
+            cur = con.execute(
+                "DELETE FROM briefing_templates WHERE id = ? AND brand_slug = ?",
+                (template_id, brand_slug),
+            )
     return cur.rowcount > 0
 
 
 # --------------------------------------------------------------------------
 # Quotas / uso (single-tenant — vira por-tenant na fase 2)
 # --------------------------------------------------------------------------
-def quota_counts() -> dict[str, int]:
+def quota_counts(brand_slug: str | None = None) -> dict[str, int]:
     """
     Calcula as contagens correntes de uso pra confronto com as quotas.
+
+    Args:
+        brand_slug: filtra por brand. None = global sem filtro — mantido
+            opcional pra não quebrar chamadas existentes antes do wiring de
+            auth (PR2), onde cada brand passa a ter sua própria contagem.
 
     Retorna dict com:
       - campanhas_mes: criadas no mês corrente (UTC simples — ISO date prefix)
@@ -521,19 +614,23 @@ def quota_counts() -> dict[str, int]:
     from datetime import date
     hoje = date.today().isoformat()
     mes_prefix = hoje[:7]  # YYYY-MM
+    brand_filtro = "AND brand_slug = ?" if brand_slug is not None else ""
+    brand_args = (brand_slug,) if brand_slug is not None else ()
 
     with connect() as con:
         row_mes = con.execute(
-            "SELECT COUNT(*) AS n FROM campaigns WHERE substr(created_at,1,7) = ?",
-            (mes_prefix,),
+            f"SELECT COUNT(*) AS n FROM campaigns WHERE substr(created_at,1,7) = ? {brand_filtro}",
+            (mes_prefix, *brand_args),
         ).fetchone()
         row_futuro = con.execute(
-            "SELECT COUNT(*) AS n FROM campaigns WHERE data_agendada IS NOT NULL AND data_agendada > ?",
-            (hoje,),
+            "SELECT COUNT(*) AS n FROM campaigns WHERE data_agendada IS NOT NULL "
+            f"AND data_agendada > ? {brand_filtro}",
+            (hoje, *brand_args),
         ).fetchone()
         row_pendentes = con.execute(
             "SELECT COUNT(*) AS n FROM campaigns "
-            "WHERE status IN ('gerando','ajuste_solicitado','aguardando_aprovacao')"
+            f"WHERE status IN ('gerando','ajuste_solicitado','aguardando_aprovacao') {brand_filtro}",
+            brand_args,
         ).fetchone()
 
     return {
