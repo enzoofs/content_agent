@@ -37,6 +37,17 @@ def slugify(texto: str) -> str:
     return ascii_str or "campanha"
 
 
+def slugify_brand(texto: str) -> str:
+    """
+    Como slugify(), mas com '_' em vez de '-' — mantém a convenção dos
+    brands existentes (mendes_vaz, gui_raw) e evita confusão com slugs de
+    campanha (que usam '-'). "campanha" nunca aparece aqui (fallback vazio
+    vira "brand").
+    """
+    base = slugify(texto).replace("-", "_")
+    return base if base != "campanha" else "brand"
+
+
 def make_campaign_id(area_direito: str, tema_especifico: str = "") -> str:
     """
     Gera o campaign_id no formato YYYY-MM-DD_slug.

@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
+import sqlite3
 import threading
 import traceback
 import webbrowser
@@ -41,13 +43,14 @@ from flask_login import (
     logout_user,
 )
 from waitress import serve as waitress_serve
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import settings
 from config.brands import BriefingField
 from config import brands as brands_module
 from modules import (
     briefing_parser,
+    brands_store,
     campaign_store,
     composer,
     copy_generator,
@@ -403,6 +406,45 @@ def _salvar_upload(campaign_id: str, file_storage) -> str:
 
 
 # --------------------------------------------------------------------------
+# Logo de brand novo (cadastro de cliente na tela de admin)
+# --------------------------------------------------------------------------
+_LOGO_MAX_BYTES = 5 * 1024 * 1024  # 5 MB — logo não precisa do tamanho de foto de campanha
+
+
+def _salvar_logo_brand(slug: str, file_storage) -> str:
+    """
+    Persiste o logo enviado no cadastro de cliente em assets/logo_<slug>.<ext>
+    (mesma convenção dos brands hardcoded — ver config/brands/mendes_vaz.py).
+
+    Returns:
+        Nome do arquivo salvo (ex.: "logo_acme.png") — vai pro brands.logo_filename.
+
+    Raises:
+        ValueError: extensão não suportada ou arquivo vazio/gigante demais.
+    """
+    nome_orig = file_storage.filename or ""
+    ext = os.path.splitext(nome_orig)[1].lower()
+    if ext not in _UPLOAD_EXT_PERMITIDAS:
+        raise ValueError(
+            f"Formato de imagem não suportado: {ext or '(sem extensão)'}. "
+            f"Aceitos: {sorted(_UPLOAD_EXT_PERMITIDAS)}."
+        )
+    destino = settings.ASSETS_DIR / f"logo_{slug}{ext}"
+    file_storage.save(str(destino))
+    tamanho = destino.stat().st_size
+    if tamanho == 0:
+        destino.unlink(missing_ok=True)
+        raise ValueError("Logo enviado está vazio.")
+    if tamanho > _LOGO_MAX_BYTES:
+        destino.unlink(missing_ok=True)
+        raise ValueError(
+            f"Logo muito grande ({tamanho // 1024 // 1024} MB). "
+            f"Limite: {_LOGO_MAX_BYTES // 1024 // 1024} MB."
+        )
+    return destino.name
+
+
+# --------------------------------------------------------------------------
 # Disparo assíncrono da geração (funções isoladas para facilitar teste/mocks)
 # --------------------------------------------------------------------------
 def _iniciar_geracao_async(briefing: dict) -> None:
@@ -741,6 +783,134 @@ def build_app() -> Flask:
             return jsonify({"erro": f"Brand desconhecido: {slug!r}."}), 400
         session["active_brand"] = slug
         return jsonify({"status": "ok", "brand_slug": slug})
+
+    @app.route("/api/admin/stats", methods=["GET"])
+    @login_required
+    def api_admin_stats():
+        """Stats pra tela de admin: quota + tokens por brand, usuários cadastrados."""
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode ver estatísticas."}), 403
+
+        tokens_por_brand = store.tokens_used_por_brand()
+        brands_info = []
+        for slug in brands_module.list_available_brands():
+            brands_info.append({
+                "slug": slug,
+                "quota": quotas.snapshot(slug),
+                "tokens_used": tokens_por_brand.get(slug, 0),
+            })
+        # NUNCA devolve senha_hash — é o hash da senha, mas ainda assim não
+        # deve trafegar pro cliente.
+        usuarios = [
+            {k: v for k, v in u.items() if k != "senha_hash"}
+            for u in users_store.list_usuarios()
+        ]
+        return jsonify({"brands": brands_info, "usuarios": usuarios})
+
+    @app.route("/api/admin/clients", methods=["POST"])
+    @login_required
+    def api_admin_criar_cliente():
+        """
+        Cadastra um cliente novo: cria o brand (multipart, logo opcional) +
+        o primeiro usuário desse brand, numa única chamada.
+        """
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode cadastrar clientes."}), 403
+
+        if request.content_type and request.content_type.startswith("multipart/form-data"):
+            body = {k: v for k, v in request.form.items()}
+            logo_file = request.files.get("logo")
+            if logo_file and not logo_file.filename:
+                logo_file = None
+        else:
+            body = request.get_json(force=True) or {}
+            logo_file = None
+
+        nome = (body.get("nome") or "").strip()
+        email = (body.get("email") or "").strip()
+        if not nome:
+            return jsonify({"erro": "Campo 'nome' é obrigatório."}), 400
+        if not email:
+            return jsonify({"erro": "Campo 'email' é obrigatório."}), 400
+
+        slug = (body.get("slug") or "").strip() or utils.slugify_brand(nome)
+        if not re.fullmatch(r"[a-z][a-z0-9_]{1,49}", slug):
+            return jsonify({"erro": f"Slug inválido: {slug!r}. Use letras minúsculas, números e '_'."}), 400
+        if slug in brands_module.list_available_brands():
+            return jsonify({"erro": f"Já existe um brand com o slug {slug!r}."}), 400
+
+        colors = {
+            "navy": body.get("navy") or "#272D4D",
+            "gold": body.get("gold") or "#E3B644",
+            "white": body.get("white") or "#FFFFFF",
+            "cream": body.get("cream") or "#F5F0E8",
+            "navy_dark": body.get("navy_dark") or "#1A2038",
+        }
+
+        logo_filename = None
+        if logo_file is not None:
+            try:
+                logo_filename = _salvar_logo_brand(slug, logo_file)
+            except ValueError as e:
+                return jsonify({"erro": str(e)}), 400
+
+        use_image_logo = (body.get("use_image_logo") in ("true", "1", "on", True)) and logo_filename is not None
+
+        brands_store.criar_brand(
+            slug, nome, colors,
+            logo_filename=logo_filename,
+            use_image_logo=use_image_logo,
+            theme=body.get("theme") or "light",
+            google_fonts_url=body.get("google_fonts_url") or "",
+            ui_heading_font=body.get("ui_heading_font") or "",
+            ui_body_font=body.get("ui_body_font") or "",
+            image_prompt_suffix=body.get("image_prompt_suffix") or "",
+            ideogram_negative_prompt=body.get("ideogram_negative_prompt") or "",
+            approved_by=body.get("approved_by") or "",
+            system_prompt=body.get("system_prompt") or "",
+            system_prompt_carousel=body.get("system_prompt_carousel") or "",
+        )
+
+        senha = secrets.token_urlsafe(12)
+        try:
+            users_store.criar_usuario(email, generate_password_hash(senha), slug, role="cliente")
+        except sqlite3.IntegrityError:
+            # Email já existe — desfaz o brand recém-criado (evita brand
+            # órfão sem ninguém pra logar nele).
+            brands_store.delete_brand(slug)
+            return jsonify({"erro": f"Email {email!r} já está cadastrado."}), 400
+
+        return jsonify({"slug": slug, "email": email, "senha_temporaria": senha}), 201
+
+    @app.route("/api/admin/users", methods=["POST"])
+    @login_required
+    def api_admin_criar_usuario():
+        """Cria um usuário adicional pra um brand já existente (ou outro admin)."""
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode criar usuários."}), 403
+
+        body = request.get_json(force=True) or {}
+        email = (body.get("email") or "").strip()
+        role = body.get("role", "cliente")
+        brand_slug = body.get("brand_slug")
+
+        if not email:
+            return jsonify({"erro": "Campo 'email' é obrigatório."}), 400
+        if role not in ("cliente", "admin"):
+            return jsonify({"erro": f"Role inválida: {role!r}."}), 400
+        if role == "cliente":
+            if brand_slug not in brands_module.list_available_brands():
+                return jsonify({"erro": f"Brand desconhecido: {brand_slug!r}."}), 400
+        else:
+            brand_slug = None
+
+        senha = secrets.token_urlsafe(12)
+        try:
+            users_store.criar_usuario(email, generate_password_hash(senha), brand_slug, role)
+        except sqlite3.IntegrityError:
+            return jsonify({"erro": f"Email {email!r} já está cadastrado."}), 400
+
+        return jsonify({"email": email, "senha_temporaria": senha}), 201
 
     # ---- Estáticos / UI ----
     @app.route("/")
