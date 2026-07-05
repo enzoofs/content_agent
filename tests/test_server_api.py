@@ -14,6 +14,7 @@ import pytest
 
 from config import settings
 from modules import campaign_store, server
+from tests import _auth_helpers
 
 CID = "2099-01-01_teste-server"
 
@@ -25,7 +26,9 @@ def client(monkeypatch):
     monkeypatch.setattr(server, "_iniciar_regeracao_async", lambda cid, nota: None)
     app = server.build_app()
     app.config.update(TESTING=True)
-    yield app.test_client()
+    c = app.test_client()
+    _auth_helpers.login(c)  # sessão de um cliente mendes_vaz autenticado
+    yield c
     shutil.rmtree(settings.CAMPAIGNS_DIR / CID, ignore_errors=True)
     for f in settings.EXPORTS_DIR.glob(f"{CID}_*"):
         f.unlink(missing_ok=True)
@@ -66,6 +69,20 @@ def test_criar_campanha(client):
     assert campaign_store.read_state(CID)["status"] == "gerando"
 
 
+def test_criar_campanha_multipart_sem_arquivo_upload_nao_quebra(client):
+    """
+    Regressão: form multipart com o campo "upload" presente mas vazio
+    (input file sem arquivo escolhido) não pode ser tratado como se um
+    arquivo real tivesse sido enviado — mesmo bug de FileStorage "falsy"
+    corrigido em api_signup_request (ver tests/test_signup_api.py).
+    """
+    import io
+    body = {k: str(v) for k, v in _briefing_body().items()}
+    body["upload"] = (io.BytesIO(b""), "")
+    resp = client.post("/api/campaigns", content_type="multipart/form-data", data=body)
+    assert resp.status_code == 201
+
+
 def test_criar_briefing_invalido_400(client):
     body = _briefing_body()
     body["tom"] = "informal"  # inválido
@@ -99,7 +116,7 @@ def test_approve_exporta_e_marca(client, monkeypatch):
     campaign_store.marcar_aguardando(CID)
     monkeypatch.setattr(
         server.exporter, "export_approved",
-        lambda cid, oid: {
+        lambda cid, oid, brand=None: {
             "png": Path("fake.png"),
             "metadata": Path("fake.json"),
             "post_txt": Path("fake.txt"),
@@ -121,7 +138,7 @@ def test_approve_data_passada_400(client, monkeypatch):
     campaign_store.marcar_aguardando(CID)
     monkeypatch.setattr(
         server.exporter, "export_approved",
-        lambda cid, oid: {
+        lambda cid, oid, brand=None: {
             "png": Path("fake.png"), "metadata": Path("fake.json"),
             "post_txt": Path("fake.txt"), "all_pngs": [Path("fake.png")],
         },
@@ -203,7 +220,7 @@ def test_edit_copy_simples_atualiza_e_recompoe(client, monkeypatch):
     recomposed: list = []
     monkeypatch.setattr(
         server.composer, "recompose_option",
-        lambda briefing, opcao: recomposed.append(opcao) or [Path("fake.png")],
+        lambda briefing, opcao, brand=None: recomposed.append(opcao) or [Path("fake.png")],
     )
 
     resp = client.post(
@@ -242,7 +259,7 @@ def test_edit_copy_carrossel_edita_metadado_e_slides(client, monkeypatch):
     campaign_store.marcar_aguardando(CID)
 
     monkeypatch.setattr(server.composer, "recompose_option",
-                        lambda b, o: [Path("fake.png")])
+                        lambda b, o, brand=None: [Path("fake.png")])
 
     resp = client.post(
         f"/api/campaigns/{CID}/edit-copy",

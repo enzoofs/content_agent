@@ -21,32 +21,77 @@ Estáticos:
 
 from __future__ import annotations
 
-import hmac
 import json
 import os
+import re
+import secrets
+import sqlite3
 import threading
 import traceback
+import uuid
 import webbrowser
 
 import io
 import zipfile
 
-from flask import Flask, Response, abort, jsonify, request, send_file, send_from_directory
+from flask import Flask, Response, abort, g, jsonify, request, send_file, send_from_directory, session
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
 from waitress import serve as waitress_serve
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import settings
 from config.brands import BriefingField
+from config import brands as brands_module
 from modules import (
     briefing_parser,
+    brands_store,
     campaign_store,
     composer,
     copy_generator,
     exporter,
     pipeline,
     quotas,
+    signup_requests_store,
     store,
+    users_store,
     utils,
 )
+
+
+# --------------------------------------------------------------------------
+# Autenticação (flask-login) — usuário determina qual brand fica ativo
+# --------------------------------------------------------------------------
+class AuthUser(UserMixin):
+    """Wrapper fino sobre uma linha de `users` pro contrato do flask-login."""
+
+    def __init__(self, row: dict):
+        self.id = row["id"]
+        self.email = row["email"]
+        self.brand_slug = row["brand_slug"]
+        self.role = row["role"]
+
+    def get_id(self) -> str:
+        return str(self.id)
+
+
+def _active_brand_slug() -> str | None:
+    """
+    Resolve o slug do brand ativo pra sessão atual.
+
+    - role="cliente": sempre o brand fixo do usuário.
+    - role="admin": o brand escolhido na sessão (POST /api/admin/brand),
+        ou None se ainda não escolheu nenhum (frontend mostra o seletor).
+    """
+    if current_user.role == "admin":
+        return session.get("active_brand")
+    return current_user.brand_slug
 
 
 # --------------------------------------------------------------------------
@@ -128,7 +173,9 @@ _DEFAULT_BRIEFING_FIELDS = (
 
 def _brand_briefing_fields() -> tuple[BriefingField, ...]:
     """Retorna o schema do brand ativo, com fallback pro default M&V-shaped."""
-    return settings.brand.briefing_fields or _DEFAULT_BRIEFING_FIELDS
+    if g.brand is None:
+        return _DEFAULT_BRIEFING_FIELDS
+    return g.brand.briefing_fields or _DEFAULT_BRIEFING_FIELDS
 
 
 def _serialize_briefing_field(f: BriefingField) -> dict:
@@ -151,8 +198,22 @@ def _serialize_briefing_field(f: BriefingField) -> dict:
 
 
 def _brand_payload() -> dict:
-    """Metadata do brand ativo pra UI consumir via /api/brand."""
-    b = settings.brand
+    """
+    Metadata do brand ativo pra UI consumir via /api/brand.
+
+    Quando g.brand é None (admin sem brand escolhido ainda), devolve um
+    payload neutro — a UI detecta `slug: null` e mostra o seletor de brand.
+    """
+    if g.brand is None:
+        return {
+            "nome": None,
+            "slug": None,
+            "colors": {},
+            "fonts": {},
+            "logo_url": None,
+            "briefing_fields": [_serialize_briefing_field(f) for f in _DEFAULT_BRIEFING_FIELDS],
+        }
+    b = g.brand
     return {
         "nome": b.nome,
         "slug": b.slug,
@@ -177,7 +238,9 @@ def _brand_css_vars() -> str:
     - ui_heading_font / ui_body_font: força a fonte do brand em .brand-name,
       .page-title e body (sobrepõe Playfair/Montserrat default do M&V).
     """
-    b = settings.brand
+    if g.brand is None:
+        return ""
+    b = g.brand
     c = b.colors
     root_overrides = []
     if "navy" in c:
@@ -286,15 +349,17 @@ def _brand_logo_tag() -> str:
     Render do <img> do logo OU string vazia quando o brand é typographic.
     Usado pra substituir {{BRAND_LOGO_TAG}} no index.html.
     """
-    if not settings.brand.use_image_logo:
+    if g.brand is None or not g.brand.use_image_logo:
         return ""
-    nome_esc = settings.brand.nome.replace('"', "&quot;")
+    nome_esc = g.brand.nome.replace('"', "&quot;")
     return f'<img src="/brand-logo" alt="{nome_esc}" class="brand-logo">'
 
 
 def _brand_google_fonts_link() -> str:
     """Link adicional do Google Fonts do brand (vazio se não definido)."""
-    url = settings.brand.google_fonts_url
+    if g.brand is None:
+        return ""
+    url = g.brand.google_fonts_url
     if not url:
         return ""
     return f'<link href="{url}" rel="stylesheet">'
@@ -343,6 +408,144 @@ def _salvar_upload(campaign_id: str, file_storage) -> str:
 
 
 # --------------------------------------------------------------------------
+# Logo de brand novo (solicitação pública de cadastro)
+# --------------------------------------------------------------------------
+_LOGO_MAX_BYTES = 5 * 1024 * 1024  # 5 MB — logo não precisa do tamanho de foto de campanha
+
+
+_PENDING_LOGOS_DIR_NAME = "pending_logos"
+
+
+def _salvar_logo_pendente(file_storage) -> str:
+    """
+    Persiste o logo enviado numa solicitação pública (POST /api/signup-requests)
+    em assets/pending_logos/ — NÃO no nome final (assets/logo_<slug>.<ext>),
+    porque a solicitação pode ser rejeitada ou o slug pode colidir depois.
+    Só vira o arquivo final quando a solicitação é aprovada (ver
+    api_admin_aprovar_solicitacao).
+
+    Returns:
+        Nome do arquivo salvo (ex.: "3f9a1c2b....png") — vai pro
+        signup_requests.logo_filename_pendente.
+
+    Raises:
+        ValueError: extensão não suportada ou arquivo vazio/gigante demais.
+    """
+    nome_orig = file_storage.filename or ""
+    ext = os.path.splitext(nome_orig)[1].lower()
+    if ext not in _UPLOAD_EXT_PERMITIDAS:
+        raise ValueError(
+            f"Formato de imagem não suportado: {ext or '(sem extensão)'}. "
+            f"Aceitos: {sorted(_UPLOAD_EXT_PERMITIDAS)}."
+        )
+    pending_dir = settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME
+    pending_dir.mkdir(parents=True, exist_ok=True)
+    nome_arquivo = f"{uuid.uuid4().hex}{ext}"
+    destino = pending_dir / nome_arquivo
+    file_storage.save(str(destino))
+    tamanho = destino.stat().st_size
+    if tamanho == 0:
+        destino.unlink(missing_ok=True)
+        raise ValueError("Logo enviado está vazio.")
+    if tamanho > _LOGO_MAX_BYTES:
+        destino.unlink(missing_ok=True)
+        raise ValueError(
+            f"Logo muito grande ({tamanho // 1024 // 1024} MB). "
+            f"Limite: {_LOGO_MAX_BYTES // 1024 // 1024} MB."
+        )
+    return nome_arquivo
+
+
+def _apagar_logo_pendente(nome_arquivo: str) -> None:
+    """Remove um logo pendente do disco (solicitação rejeitada)."""
+    (settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME / nome_arquivo).unlink(missing_ok=True)
+
+
+def _promover_logo_pendente(nome_arquivo: str, slug: str) -> str:
+    """Renomeia um logo pendente pro nome final (assets/logo_<slug>.<ext>)."""
+    origem = settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME / nome_arquivo
+    ext = origem.suffix
+    novo_nome = f"logo_{slug}{ext}"
+    origem.rename(settings.ASSETS_DIR / novo_nome)
+    return novo_nome
+
+
+# --------------------------------------------------------------------------
+# Cadastro de cliente (brand + primeiro usuário) — usado só pela aprovação
+# de solicitação (POST /api/admin/signup-requests/<id>/approve)
+# --------------------------------------------------------------------------
+def _resolver_slug_brand(nome: str, slug_desejado: str | None) -> str:
+    """Resolve e valida um slug de brand novo. Levanta ValueError se inválido ou já em uso."""
+    slug = (slug_desejado or "").strip() or utils.slugify_brand(nome)
+    if not re.fullmatch(r"[a-z][a-z0-9_]{1,49}", slug):
+        raise ValueError(f"Slug inválido: {slug!r}. Use letras minúsculas, números e '_'.")
+    if slug in brands_module.list_available_brands():
+        raise ValueError(f"Já existe um brand com o slug {slug!r}.")
+    return slug
+
+
+def _criar_cliente_e_usuario(dados: dict) -> tuple[str, str, str]:
+    """
+    Cria um brand + o primeiro usuário desse brand, a partir de um dict
+    normalizado de campos (nome, email, slug, navy/gold/white/cream/navy_dark,
+    logo_filename já resolvido, use_image_logo, theme, google_fonts_url,
+    ui_heading_font, ui_body_font, image_prompt_suffix, ideogram_negative_prompt,
+    approved_by, system_prompt, system_prompt_carousel).
+
+    Returns:
+        (slug, email, senha_temporaria)
+
+    Raises:
+        ValueError: campo obrigatório ausente, slug inválido/em uso, ou email
+            já cadastrado (nesse caso o brand recém-criado é desfeito).
+    """
+    nome = (dados.get("nome") or "").strip()
+    email = (dados.get("email") or "").strip()
+    if not nome:
+        raise ValueError("Campo 'nome' é obrigatório.")
+    if not email:
+        raise ValueError("Campo 'email' é obrigatório.")
+
+    slug = _resolver_slug_brand(nome, dados.get("slug"))
+
+    colors = {
+        "navy": dados.get("navy") or "#272D4D",
+        "gold": dados.get("gold") or "#E3B644",
+        "white": dados.get("white") or "#FFFFFF",
+        "cream": dados.get("cream") or "#F5F0E8",
+        "navy_dark": dados.get("navy_dark") or "#1A2038",
+    }
+    logo_filename = dados.get("logo_filename")
+    use_image_logo = (dados.get("use_image_logo") in ("true", "1", "on", True)) and logo_filename is not None
+
+    brands_store.criar_brand(
+        slug, nome, colors,
+        logo_filename=logo_filename,
+        use_image_logo=use_image_logo,
+        theme=dados.get("theme") or "light",
+        google_fonts_url=dados.get("google_fonts_url") or "",
+        ui_heading_font=dados.get("ui_heading_font") or "",
+        ui_body_font=dados.get("ui_body_font") or "",
+        image_prompt_suffix=dados.get("image_prompt_suffix") or "",
+        ideogram_negative_prompt=dados.get("ideogram_negative_prompt") or "",
+        approved_by=dados.get("approved_by") or "",
+        system_prompt=dados.get("system_prompt") or "",
+        system_prompt_carousel=dados.get("system_prompt_carousel") or "",
+    )
+
+    senha = secrets.token_urlsafe(12)
+    try:
+        users_store.criar_usuario(email, generate_password_hash(senha), slug, role="cliente")
+    except sqlite3.IntegrityError:
+        # Email já existe — desfaz o brand recém-criado (evita brand órfão
+        # sem ninguém pra logar nele).
+        brands_store.delete_brand(slug)
+        raise ValueError(f"Email {email!r} já está cadastrado.")
+
+    return slug, email, senha
+
+
+# --------------------------------------------------------------------------
 # Disparo assíncrono da geração (funções isoladas para facilitar teste/mocks)
 # --------------------------------------------------------------------------
 def _iniciar_geracao_async(briefing: dict) -> None:
@@ -379,6 +582,28 @@ def _iniciar_regeracao_async(campaign_id: str, nota: str) -> None:
 
 
 # --------------------------------------------------------------------------
+# Guarda de posse (isolamento entre brands)
+# --------------------------------------------------------------------------
+def _checar_posse(campaign_id: str) -> dict:
+    """
+    Carrega a campanha e garante que pertence ao brand ativo (ou que o
+    usuário é admin, que enxerga tudo).
+
+    404 (não 403) em caso de acesso cruzado — evita confirmar pra um cliente
+    que existe uma campanha de outro brand com aquele id.
+
+    Raises:
+        werkzeug.exceptions.NotFound: campanha inexistente OU de outro brand.
+    """
+    campanha = campaign_store.read_state(campaign_id)
+    if campanha is None:
+        abort(404, description=f"Campanha {campaign_id} não encontrada.")
+    if current_user.role != "admin" and campanha.get("brand_slug") != (g.brand.slug if g.brand else None):
+        abort(404, description=f"Campanha {campaign_id} não encontrada.")
+    return campanha
+
+
+# --------------------------------------------------------------------------
 # Montagem do payload de uma campanha para a UI
 # --------------------------------------------------------------------------
 def _campaign_payload(campaign_id: str) -> dict:
@@ -388,9 +613,7 @@ def _campaign_payload(campaign_id: str) -> dict:
     image_url}]` em vez de um único `composed_image_url`. Caption/cta/hashtags
     ficam no nível da opção (mesmo padrão do Instagram).
     """
-    estado = campaign_store.read_state(campaign_id)
-    if estado is None:
-        abort(404, description=f"Campanha {campaign_id} não encontrada.")
+    estado = _checar_posse(campaign_id)
 
     briefing = campaign_store.read_briefing(campaign_id) or {}
 
@@ -565,37 +788,310 @@ def build_app() -> Flask:
     """Cria a app Flask da central (persistente, multi-campanha)."""
     app = Flask(__name__, static_folder=None)
 
-    # ---- HTTP Basic Auth (opcional) ----
-    # Protege a SPA quando exposta na internet (Fly.io). Em dev local
-    # (sem as env vars) fica desligado pra não atrapalhar.
-    # Comparação com hmac.compare_digest evita timing attack na senha.
-    _auth_user = os.getenv("BASIC_AUTH_USER")
-    _auth_pass = os.getenv("BASIC_AUTH_PASS")
+    # ---- Sessão / login (flask-login) ----
+    # FLASK_SECRET_KEY ausente = chave efêmera por processo (dev local "só
+    # funciona", igual o Basic Auth antigo) — sessões não sobrevivem a
+    # restart do servidor nesse caso.
+    secret = os.getenv("FLASK_SECRET_KEY")
+    if not secret:
+        secret = secrets.token_hex(32)
+        print("⚠️  FLASK_SECRET_KEY não configurada — usando chave efêmera "
+              "(sessões não sobrevivem a um restart do servidor).")
+    app.secret_key = secret
+
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+
+    @login_manager.user_loader
+    def load_user(user_id: str):
+        row = users_store.get_by_id(int(user_id))
+        return AuthUser(row) if row else None
+
     # Endpoint público p/ healthcheck do Fly.io — precisa ficar livre de auth
     @app.route("/health")
     def _health():
         return "ok", 200
 
-    if _auth_user and _auth_pass:
-        @app.before_request
-        def _require_basic_auth():
-            # /health fica sempre aberto pra Fly conseguir checar
-            if request.path == "/health":
-                return None
-            auth = request.authorization
-            ok = (
-                auth is not None
-                and auth.username is not None
-                and auth.password is not None
-                and hmac.compare_digest(auth.username, _auth_user)
-                and hmac.compare_digest(auth.password, _auth_pass)
-            )
-            if not ok:
-                return Response(
-                    "Autenticação necessária.",
-                    status=401,
-                    headers={"WWW-Authenticate": 'Basic realm="Mendes & Vaz Social"'},
-                )
+    # /style.css é público pra login.html conseguir carregar o CSS sem sessão.
+    # /signup + /api/signup-requests são públicas de propósito: qualquer
+    # pessoa não-autenticada pode solicitar cadastro (aprovação fica com
+    # o admin, ver POST /api/admin/signup-requests/<id>/approve).
+    _ROTAS_PUBLICAS = {
+        "/health", "/login", "/logout", "/style.css",
+        "/signup", "/signup.js", "/api/signup-requests",
+    }
+
+    @app.before_request
+    def _require_login():
+        if request.path in _ROTAS_PUBLICAS:
+            return None
+        if current_user.is_authenticated:
+            return None
+        if request.path.startswith("/api/"):
+            return jsonify({"erro": "Autenticação necessária."}), 401
+        return Response(status=302, headers={"Location": "/login"})
+
+    @app.before_request
+    def _resolve_brand():
+        """Popula g.brand pra sessão atual (None se não-autenticado ou admin sem brand escolhido)."""
+        if not current_user.is_authenticated:
+            g.brand = None
+            return
+        slug = _active_brand_slug()
+        g.brand = brands_module.load(slug) if slug else None
+
+    @app.route("/login", methods=["GET"])
+    def login_form():
+        html = (settings.APPROVAL_UI_DIR / "login.html").read_text(encoding="utf-8")
+        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+    @app.route("/login", methods=["POST"])
+    def login_submit():
+        if request.is_json:
+            body = request.get_json(force=True)
+            email, senha = body.get("email", ""), body.get("senha", "")
+        else:
+            email, senha = request.form.get("email", ""), request.form.get("senha", "")
+        row = users_store.get_by_email(email)
+        if row is None or not check_password_hash(row["senha_hash"], senha):
+            if request.is_json:
+                return jsonify({"erro": "Email ou senha inválidos."}), 401
+            return "Email ou senha inválidos.", 401
+        login_user(AuthUser(row))
+        # Admin cai direto em /admin — a tela de "escolha um brand" só faz
+        # sentido quando ele deliberadamente entra na central de campanhas
+        # de um cliente, não como gate obrigatório logo após o login.
+        destino = "/admin" if row["role"] == "admin" else "/"
+        if request.is_json:
+            return jsonify({"status": "ok", "redirect": destino})
+        return Response(status=302, headers={"Location": destino})
+
+    @app.route("/logout", methods=["POST"])
+    @login_required
+    def logout_submit():
+        logout_user()
+        session.pop("active_brand", None)
+        return Response(status=302, headers={"Location": "/login"})
+
+    @app.route("/api/me", methods=["GET"])
+    @login_required
+    def api_me():
+        return jsonify({
+            "email": current_user.email,
+            "role": current_user.role,
+            "brand_slug": _active_brand_slug(),
+            "available_brands": list(brands_module.list_available_brands()) if current_user.role == "admin" else [],
+        })
+
+    @app.route("/api/admin/brand", methods=["POST"])
+    @login_required
+    def api_admin_brand():
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode trocar de brand."}), 403
+        body = request.get_json(force=True) or {}
+        slug = body.get("slug")
+        if slug not in brands_module.list_available_brands():
+            return jsonify({"erro": f"Brand desconhecido: {slug!r}."}), 400
+        session["active_brand"] = slug
+        return jsonify({"status": "ok", "brand_slug": slug})
+
+    @app.route("/api/admin/stats", methods=["GET"])
+    @login_required
+    def api_admin_stats():
+        """Stats pra tela de admin: quota + tokens por brand, usuários cadastrados."""
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode ver estatísticas."}), 403
+
+        tokens_por_brand = store.tokens_used_por_brand()
+        brands_info = []
+        for slug in brands_module.list_available_brands():
+            brands_info.append({
+                "slug": slug,
+                "quota": quotas.snapshot(slug),
+                "tokens_used": tokens_por_brand.get(slug, 0),
+            })
+        # NUNCA devolve senha_hash — é o hash da senha, mas ainda assim não
+        # deve trafegar pro cliente.
+        usuarios = [
+            {k: v for k, v in u.items() if k != "senha_hash"}
+            for u in users_store.list_usuarios()
+        ]
+        return jsonify({"brands": brands_info, "usuarios": usuarios})
+
+    @app.route("/api/signup-requests", methods=["POST"])
+    def api_signup_request():
+        """
+        Solicitação pública de cadastro (sem login) — só o essencial. Os
+        campos técnicos (prompts) ficam vazios até o admin revisar/aprovar.
+        """
+        if request.content_type and request.content_type.startswith("multipart/form-data"):
+            body = {k: v for k, v in request.form.items()}
+            logo_file = request.files.get("logo")
+            # "is not None" (não truthiness): FileStorage vazio é falsy no
+            # Werkzeug, então "if logo_file and ..." nunca entra aqui e o
+            # objeto (falsy mas != None) escapava pro check de baixo.
+            if logo_file is not None and not logo_file.filename:
+                logo_file = None
+        else:
+            body = request.get_json(force=True) or {}
+            logo_file = None
+
+        nome = (body.get("nome") or "").strip()
+        email = (body.get("email") or "").strip()
+        if not nome:
+            return jsonify({"erro": "Campo 'nome' é obrigatório."}), 400
+        if not email or "@" not in email:
+            return jsonify({"erro": "Email inválido."}), 400
+
+        colors = {
+            "navy": body.get("navy") or "#272D4D",
+            "gold": body.get("gold") or "#E3B644",
+            "white": body.get("white") or "#FFFFFF",
+            "cream": body.get("cream") or "#F5F0E8",
+            "navy_dark": body.get("navy_dark") or "#1A2038",
+        }
+
+        logo_filename_pendente = None
+        if logo_file is not None:
+            try:
+                logo_filename_pendente = _salvar_logo_pendente(logo_file)
+            except ValueError as e:
+                return jsonify({"erro": str(e)}), 400
+
+        signup_requests_store.criar_solicitacao(
+            nome, email, colors,
+            slug_sugerido=(body.get("slug") or "").strip() or None,
+            logo_filename_pendente=logo_filename_pendente,
+            use_image_logo=(body.get("use_image_logo") in ("true", "1", "on", True)),
+            theme=body.get("theme") or "light",
+            google_fonts_url=body.get("google_fonts_url") or "",
+            ui_heading_font=body.get("ui_heading_font") or "",
+            ui_body_font=body.get("ui_body_font") or "",
+            sobre_negocio=body.get("sobre_negocio") or "",
+        )
+        return jsonify({"status": "recebido"}), 201
+
+    @app.route("/api/admin/signup-requests", methods=["GET"])
+    @login_required
+    def api_admin_listar_solicitacoes():
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode ver solicitações."}), 403
+        status = request.args.get("status")
+        return jsonify(signup_requests_store.list_solicitacoes(status))
+
+    @app.route("/api/admin/signup-requests/<int:id_>/approve", methods=["POST"])
+    @login_required
+    def api_admin_aprovar_solicitacao(id_: int):
+        """
+        Aprova uma solicitação: cria o brand + o primeiro usuário. O corpo da
+        requisição pode trazer qualquer campo pra sobrescrever/completar o
+        que veio na solicitação (ex.: os prompts técnicos, que o form público
+        não pede).
+        """
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode aprovar solicitações."}), 403
+
+        solicitacao = signup_requests_store.get_by_id(id_)
+        if solicitacao is None:
+            return jsonify({"erro": f"Solicitação {id_} não encontrada."}), 404
+        if solicitacao["status"] != "pendente":
+            return jsonify({"erro": f"Solicitação já revisada (status={solicitacao['status']!r})."}), 400
+
+        cores_solicitadas = json.loads(solicitacao["colors_json"])
+        dados = {
+            "nome": solicitacao["nome"],
+            "email": solicitacao["email"],
+            "slug": solicitacao["slug_sugerido"],
+            "navy": cores_solicitadas.get("navy"),
+            "gold": cores_solicitadas.get("gold"),
+            "white": cores_solicitadas.get("white"),
+            "cream": cores_solicitadas.get("cream"),
+            "navy_dark": cores_solicitadas.get("navy_dark"),
+            "use_image_logo": solicitacao["use_image_logo"],
+            "theme": solicitacao["theme"],
+            "google_fonts_url": solicitacao["google_fonts_url"],
+            "ui_heading_font": solicitacao["ui_heading_font"],
+            "ui_body_font": solicitacao["ui_body_font"],
+            "image_prompt_suffix": solicitacao["image_prompt_suffix"],
+            "ideogram_negative_prompt": solicitacao["ideogram_negative_prompt"],
+            "approved_by": solicitacao["approved_by"],
+            "system_prompt": solicitacao["system_prompt"],
+            "system_prompt_carousel": solicitacao["system_prompt_carousel"],
+        }
+        body = request.get_json(force=True) or {}
+        for k, v in body.items():
+            if v not in (None, ""):
+                dados[k] = v
+
+        try:
+            slug = _resolver_slug_brand(dados.get("nome", ""), dados.get("slug"))
+        except ValueError as e:
+            return jsonify({"erro": str(e)}), 400
+        dados["slug"] = slug
+
+        pendente = solicitacao.get("logo_filename_pendente")
+        if pendente and (settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME / pendente).exists():
+            dados["logo_filename"] = _promover_logo_pendente(pendente, slug)
+
+        try:
+            slug, email, senha = _criar_cliente_e_usuario(dados)
+        except ValueError as e:
+            return jsonify({"erro": str(e)}), 400
+
+        signup_requests_store.marcar_revisada(id_, "aprovado", current_user.email)
+        return jsonify({"slug": slug, "email": email, "senha_temporaria": senha}), 201
+
+    @app.route("/api/admin/signup-requests/<int:id_>/reject", methods=["POST"])
+    @login_required
+    def api_admin_rejeitar_solicitacao(id_: int):
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode rejeitar solicitações."}), 403
+
+        solicitacao = signup_requests_store.get_by_id(id_)
+        if solicitacao is None:
+            return jsonify({"erro": f"Solicitação {id_} não encontrada."}), 404
+        if solicitacao["status"] != "pendente":
+            return jsonify({"erro": f"Solicitação já revisada (status={solicitacao['status']!r})."}), 400
+
+        body = request.get_json(force=True) or {}
+        motivo = (body.get("motivo") or "").strip()
+
+        pendente = solicitacao.get("logo_filename_pendente")
+        if pendente:
+            _apagar_logo_pendente(pendente)
+
+        signup_requests_store.marcar_revisada(id_, "rejeitado", current_user.email, motivo_rejeicao=motivo)
+        return jsonify({"status": "rejeitado", "id": id_})
+
+    @app.route("/api/admin/users", methods=["POST"])
+    @login_required
+    def api_admin_criar_usuario():
+        """Cria um usuário adicional pra um brand já existente (ou outro admin)."""
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode criar usuários."}), 403
+
+        body = request.get_json(force=True) or {}
+        email = (body.get("email") or "").strip()
+        role = body.get("role", "cliente")
+        brand_slug = body.get("brand_slug")
+
+        if not email:
+            return jsonify({"erro": "Campo 'email' é obrigatório."}), 400
+        if role not in ("cliente", "admin"):
+            return jsonify({"erro": f"Role inválida: {role!r}."}), 400
+        if role == "cliente":
+            if brand_slug not in brands_module.list_available_brands():
+                return jsonify({"erro": f"Brand desconhecido: {brand_slug!r}."}), 400
+        else:
+            brand_slug = None
+
+        senha = secrets.token_urlsafe(12)
+        try:
+            users_store.criar_usuario(email, generate_password_hash(senha), brand_slug, role)
+        except sqlite3.IntegrityError:
+            return jsonify({"erro": f"Email {email!r} já está cadastrado."}), 400
+
+        return jsonify({"email": email, "senha_temporaria": senha}), 201
 
     # ---- Estáticos / UI ----
     @app.route("/")
@@ -621,21 +1117,49 @@ def build_app() -> Flask:
         # - {{BRAND_GOOGLE_FONTS}}: <link> extra de Google Fonts do brand
         # - {{BRAND_CSS_VARS}}: <style> com paleta/fontes/dark-theme overrides
         from html import escape as _esc
-        html = html.replace("{{BRAND_NAME}}", _esc(settings.brand.nome))
+        nome = g.brand.nome if g.brand else "Central de Conteúdo"
+        html = html.replace("{{BRAND_NAME}}", _esc(nome))
         html = html.replace("{{BRAND_LOGO_TAG}}", _brand_logo_tag())
         html = html.replace("{{BRAND_GOOGLE_FONTS}}", _brand_google_fonts_link())
         html = html.replace("{{BRAND_CSS_VARS}}", _brand_css_vars())
         return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+    @app.route("/admin")
+    @login_required
+    def admin_page():
+        """
+        Página de admin (stats + cadastro de clientes) — sem topbar de campanhas.
+
+        Mesmo cache-bust de admin.js que index() já faz pra app.js/style.css
+        (ver comentário lá) — sem isso o browser continua servindo a versão
+        antiga do JS depois de um deploy/alteração.
+        """
+        if current_user.role != "admin":
+            abort(403)
+        html = (settings.APPROVAL_UI_DIR / "admin.html").read_text(encoding="utf-8")
+        js_mtime = int((settings.APPROVAL_UI_DIR / "admin.js").stat().st_mtime)
+        html = html.replace('src="admin.js"', f'src="admin.js?v={js_mtime}"')
+        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+    @app.route("/signup")
+    def signup_page():
+        """Solicitação pública de cadastro (sem login) — igual /login, sem tema de brand."""
+        html = (settings.APPROVAL_UI_DIR / "signup.html").read_text(encoding="utf-8")
+        js_mtime = int((settings.APPROVAL_UI_DIR / "signup.js").stat().st_mtime)
+        html = html.replace('src="signup.js"', f'src="signup.js?v={js_mtime}"')
+        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
     @app.route("/logo.png")
     def logo():
         # Legacy: mantida pra compat caso algum link antigo aponte pra /logo.png
-        return send_from_directory(settings.LOGO_PATH.parent, settings.LOGO_PATH.name)
+        logo_path = g.brand.logo_path if g.brand else settings.LOGO_PATH
+        return send_from_directory(logo_path.parent, logo_path.name)
 
     @app.route("/brand-logo")
     def brand_logo():
         """Serve o logo do brand ativo (config/brands/<slug>.py:logo_path)."""
-        return send_from_directory(settings.LOGO_PATH.parent, settings.LOGO_PATH.name)
+        logo_path = g.brand.logo_path if g.brand else settings.LOGO_PATH
+        return send_from_directory(logo_path.parent, logo_path.name)
 
     @app.route("/api/brand", methods=["GET"])
     def api_brand():
@@ -644,29 +1168,38 @@ def build_app() -> Flask:
 
     @app.route("/composed/<cid>/<path:filename>")
     def composed(cid: str, filename: str):
+        _checar_posse(cid)
         return send_from_directory(settings.CAMPAIGNS_DIR / cid / "composed", filename)
 
     # ---- API ----
     @app.route("/api/campaigns", methods=["GET"])
     def api_listar():
-        return jsonify(campaign_store.listar())
+        # Admin sem brand escolhido ainda: lista vazia (frontend mostra o seletor).
+        if g.brand is None:
+            return jsonify([])
+        return jsonify(campaign_store.listar(brand_slug=g.brand.slug))
 
     @app.route("/api/campaigns", methods=["POST"])
     def api_criar():
+        if g.brand is None:
+            return jsonify({"erro": "Escolha um brand antes de criar uma campanha."}), 400
+
         # Aceita JSON (fluxo padrão) ou multipart/form-data (quando o operador
         # envia uma foto pra usar como fundo em vez do Ideogram).
         upload_file = None
         if request.content_type and request.content_type.startswith("multipart/form-data"):
             body = {k: v for k, v in request.form.items()}
             upload_file = request.files.get("upload")
-            if upload_file and not upload_file.filename:
+            # "is not None" (não truthiness) — mesmo motivo do logo_file em
+            # api_signup_request: FileStorage vazio é falsy no Werkzeug.
+            if upload_file is not None and not upload_file.filename:
                 upload_file = None
         else:
             body = request.get_json(force=True)
 
         # 1) Quota antes de qualquer parse — falha cedo, sem custo
         try:
-            quotas.verificar_pode_criar()
+            quotas.verificar_pode_criar(g.brand.slug)
         except quotas.QuotaExcedidaError as e:
             return jsonify({
                 "erro": e.mensagem,
@@ -691,7 +1224,7 @@ def build_app() -> Flask:
                 return jsonify({"erro": str(e)}), 400
             briefing["upload_filename"] = upload_name
 
-        campaign_store.criar(briefing)
+        campaign_store.criar(briefing, brand_slug=g.brand.slug)
         utils.log(briefing["campaign_id"], "server: campanha criada, iniciando geração.")
         _iniciar_geracao_async(briefing)
         return jsonify({"campaign_id": briefing["campaign_id"], "status": "gerando"}), 201
@@ -699,7 +1232,9 @@ def build_app() -> Flask:
     @app.route("/api/quotas", methods=["GET"])
     def api_quotas():
         """Snapshot atual das quotas — UI mostra banner amarelo/vermelho conforme."""
-        return jsonify(quotas.snapshot())
+        if g.brand is None:
+            return jsonify({"itens": [], "bloqueado": False, "proximo_reset": ""})
+        return jsonify(quotas.snapshot(g.brand.slug))
 
     @app.route("/api/campaigns/<cid>", methods=["GET"])
     def api_campanha(cid: str):
@@ -707,6 +1242,7 @@ def build_app() -> Flask:
 
     @app.route("/api/campaigns/<cid>/approve", methods=["POST"])
     def api_approve(cid: str):
+        _checar_posse(cid)
         body = request.get_json(force=True)
         option_id = int(body["option_id"])
         data_agendada = body.get("data_agendada") or None
@@ -718,7 +1254,7 @@ def build_app() -> Flask:
             except ValueError as e:
                 return jsonify({"erro": str(e)}), 400
 
-        export = exporter.export_approved(cid, option_id)
+        export = exporter.export_approved(cid, option_id, brand=g.brand)
         campaign_store.marcar_aprovada(cid, option_id, data_agendada)
         utils.log(cid, f"server: opção {option_id} aprovada (data={data_agendada}).")
         return jsonify({
@@ -740,9 +1276,7 @@ def build_app() -> Flask:
         (referência humana). O cliente escolhe onde salvar no diálogo do browser
         — não precisa saber a estrutura de pastas do servidor.
         """
-        estado = campaign_store.read_state(cid)
-        if estado is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
+        estado = _checar_posse(cid)
         if estado.get("status") != "aprovada" or not estado.get("option_aprovada"):
             return jsonify({"erro": "Só dá pra baixar campanha aprovada."}), 409
 
@@ -782,9 +1316,7 @@ def build_app() -> Flask:
         o registro logo depois e deixar tudo inconsistente). Operador pode
         esperar a geração terminar ou cair em 'erro' antes de tentar de novo.
         """
-        estado = campaign_store.read_state(cid)
-        if estado is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
+        estado = _checar_posse(cid)
         if estado["status"] == "gerando":
             return jsonify({
                 "erro": "Não dá pra apagar campanha em geração. Espere terminar ou cair em erro.",
@@ -802,11 +1334,12 @@ def build_app() -> Flask:
         Não copia copy/imagens — a regeração via IA produz variações novas.
         Útil pra "quero outra rodada do mesmo tema" ou pivot de pequena escala.
         """
+        _checar_posse(cid)
+        if g.brand is None:
+            return jsonify({"erro": "Escolha um brand antes de duplicar uma campanha."}), 400
         original = campaign_store.read_briefing(cid)
-        if original is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
         try:
-            quotas.verificar_pode_criar()
+            quotas.verificar_pode_criar(g.brand.slug)
         except quotas.QuotaExcedidaError as e:
             return jsonify({
                 "erro": e.mensagem, "tipo": "quota_excedida",
@@ -830,7 +1363,7 @@ def build_app() -> Flask:
         except ValueError as e:
             return jsonify({"erro": f"Briefing original inválido: {e}"}), 400
 
-        campaign_store.criar(briefing)
+        campaign_store.criar(briefing, brand_slug=g.brand.slug)
         utils.log(briefing["campaign_id"], f"server: duplicado de {cid}, iniciando geração.")
         _iniciar_geracao_async(briefing)
         return jsonify({
@@ -841,6 +1374,7 @@ def build_app() -> Flask:
 
     @app.route("/api/campaigns/<cid>/adjust", methods=["POST"])
     def api_adjust(cid: str):
+        _checar_posse(cid)
         body = request.get_json(force=True)
         option_id = int(body["option_id"])
         nota = body.get("nota", "")
@@ -873,13 +1407,12 @@ def build_app() -> Flask:
         Sobrescreve a versão atual do copy (não bumpa copy_version — bump é só
         pra regeração via LLM). Custo zero de API.
         """
+        _checar_posse(cid)
         body = request.get_json(force=True)
         option_id = int(body["option_id"])
         fields = body.get("fields", {})
 
         briefing = campaign_store.read_briefing(cid)
-        if briefing is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
         opcoes = campaign_store.get_copy(cid)
         if opcoes is None:
             return jsonify({"erro": "Copy não encontrado para esta campanha."}), 404
@@ -897,7 +1430,7 @@ def build_app() -> Flask:
         # Persiste e recompoõe
         versao = campaign_store.get_copy_version(cid)
         campaign_store.save_copy_version(cid, versao, opcoes)
-        composer.recompose_option(briefing, opcoes[idx])
+        composer.recompose_option(briefing, opcoes[idx], brand=g.brand)
 
         utils.log(cid, f"server: opção {option_id} editada manualmente e recomposta.")
         return jsonify(_campaign_payload(cid))
@@ -905,23 +1438,28 @@ def build_app() -> Flask:
     # ---- Templates de briefing (presets reutilizáveis) ----
     @app.route("/api/templates", methods=["GET"])
     def api_templates_listar():
-        return jsonify(store.list_templates())
+        if g.brand is None:
+            return jsonify([])
+        return jsonify(store.list_templates(brand_slug=g.brand.slug))
 
     @app.route("/api/templates", methods=["POST"])
     def api_templates_salvar():
+        if g.brand is None:
+            return jsonify({"erro": "Escolha um brand antes de salvar um template."}), 400
         body = request.get_json(force=True) or {}
         nome = (body.get("nome") or "").strip()
         if not nome:
             return jsonify({"erro": "Campo 'nome' é obrigatório."}), 400
         try:
-            tpl = store.save_template(nome, body)
+            tpl = store.save_template(nome, body, brand_slug=g.brand.slug)
         except ValueError as e:
             return jsonify({"erro": str(e)}), 400
         return jsonify(tpl), 201
 
     @app.route("/api/templates/<int:template_id>", methods=["DELETE"])
     def api_templates_apagar(template_id: int):
-        if not store.delete_template(template_id):
+        brand_slug = None if current_user.role == "admin" else (g.brand.slug if g.brand else None)
+        if not store.delete_template(template_id, brand_slug=brand_slug):
             return jsonify({"erro": f"Template {template_id} não encontrado."}), 404
         return jsonify({"status": "apagado", "id": template_id})
 
@@ -946,7 +1484,7 @@ def serve() -> None:
     app = build_app()
     url = f"http://{settings.APPROVAL_HOST}:{settings.APPROVAL_PORT}/"
 
-    print(f"✓ Central de controle {settings.brand.nome} em {url}")
+    print(f"✓ Central de controle (login multi-brand) em {url}")
     print("  (Ctrl+C para encerrar)")
     try:
         webbrowser.open(url)

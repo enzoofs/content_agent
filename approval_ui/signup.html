@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitar acesso — Central de Conteúdo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Página pública, deliberadamente sem tema de brand — mesmo espírito
+       de login.html: só os tokens default de style.css. */
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-8) var(--space-6);
+    }
+    .signup-box {
+      width: 100%;
+      max-width: 560px;
+      padding: var(--space-10) var(--space-8);
+      background: var(--surface-1);
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius-md);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+    }
+    .signup-box h1 {
+      font-family: "Playfair Display", serif;
+      font-size: var(--text-2xl);
+      color: var(--ink-1);
+      margin: 0 0 var(--space-2);
+      text-align: center;
+    }
+    .signup-box .signup-sub {
+      text-align: center;
+      color: var(--ink-3);
+      font-size: var(--text-sm);
+      margin: 0 0 var(--space-8);
+    }
+    .signup-box .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4);
+    }
+    .color-field { display: flex; align-items: center; gap: var(--space-2); }
+    .color-field input[type="color"] { width: 40px; height: 32px; padding: 0; border: none; }
+    .signup-box .btn { width: 100%; margin-top: var(--space-4); }
+    .signup-erro { color: var(--red); font-size: var(--text-sm); margin: 0 0 var(--space-4); display: none; }
+    .signup-ok {
+      text-align: center; padding: var(--space-8) 0;
+    }
+    .signup-ok h2 { font-family: "Playfair Display", serif; color: var(--ink-1); margin-bottom: var(--space-3); }
+    .signup-ok p { color: var(--ink-3); }
+    .signup-footer { text-align: center; margin-top: var(--space-6); font-size: var(--text-sm); }
+    .signup-footer a { color: var(--ink-2); }
+    details.signup-avancado { margin-top: var(--space-2); }
+    details.signup-avancado summary { cursor: pointer; font-size: var(--text-sm); color: var(--ink-3); margin: var(--space-2) 0; }
+  </style>
+</head>
+<body>
+  <div class="signup-box">
+    <div id="signup-form-wrap">
+      <h1>Solicitar acesso</h1>
+      <p class="signup-sub">Conte um pouco sobre o seu negócio — um admin revisa e libera seu acesso.</p>
+      <p class="signup-erro" id="signup-erro"></p>
+      <form id="signup-form" class="form" enctype="multipart/form-data">
+        <div class="form-grid">
+          <label>Nome do seu negócio
+            <input type="text" name="nome" required placeholder="ex.: Acme Consultoria">
+          </label>
+          <label>Seu email
+            <input type="email" name="email" required>
+          </label>
+        </div>
+        <label>Conte um pouco sobre o seu negócio (opcional)
+          <textarea name="sobre_negocio" rows="3" placeholder="área de atuação, público, tom de voz que você imagina..."></textarea>
+        </label>
+
+        <details class="signup-avancado">
+          <summary>Personalizar cores e logo (opcional)</summary>
+          <div class="form-grid" style="margin-top: var(--space-3);">
+            <label>Logo (PNG/JPG/WEBP até 5MB)
+              <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp">
+            </label>
+            <label>Tema
+              <select name="theme">
+                <option value="light">Claro</option>
+                <option value="dark">Escuro</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-grid" style="margin-top: var(--space-3);">
+            <div class="color-field"><label>Navy <input type="color" name="navy" value="#272D4D"></label></div>
+            <div class="color-field"><label>Gold <input type="color" name="gold" value="#E3B644"></label></div>
+            <div class="color-field"><label>White <input type="color" name="white" value="#FFFFFF"></label></div>
+            <div class="color-field"><label>Cream <input type="color" name="cream" value="#F5F0E8"></label></div>
+          </div>
+        </details>
+
+        <button type="submit" class="btn btn-approve">Solicitar acesso</button>
+      </form>
+      <p class="signup-footer"><a href="/login">&larr; Já tenho uma conta</a></p>
+    </div>
+
+    <div class="signup-ok" id="signup-ok" style="display:none;">
+      <h2>Solicitação enviada!</h2>
+      <p>Um admin vai revisar seu pedido. Assim que aprovado, você recebe as credenciais de acesso.</p>
+      <p class="signup-footer"><a href="/login">&larr; Voltar pro login</a></p>
+    </div>
+  </div>
+
+  <script src="signup.js"></script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Central de Conteúdo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Página deliberadamente sem tema de brand (é uma área multi-brand) —
+       mesmo espírito de login.html: cores fixas neutras, não os tokens de
+       brand de style.css (--navy/--gold etc. carregam identidade do M&V
+       por default). O header aqui NÃO tem seletor de brand de propósito —
+       o admin não "entra" na visão de um cliente a partir desta tela; pra
+       ver os dados de um brand específico, ele usa o seletor que já existe
+       na central normal (index.html).  */
+    :root {
+      --admin-bg: #14161c;
+      --admin-fg: #f2f2f2;
+      --admin-fg-dim: rgba(242, 242, 242, 0.65);
+    }
+    body { margin: 0; padding: 0 0 var(--space-16); }
+    .admin-content { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-6) 0; }
+    .admin-header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--admin-bg); color: var(--admin-fg);
+      padding: var(--space-4) var(--space-6);
+      margin-bottom: var(--space-8);
+    }
+    .admin-header .admin-title {
+      font-family: "Playfair Display", serif;
+      font-size: var(--text-xl);
+      letter-spacing: 0.3px;
+    }
+    .admin-header nav { display: flex; align-items: center; gap: var(--space-5); }
+    .admin-header a {
+      color: var(--admin-fg-dim); font-size: var(--text-sm);
+      text-decoration: none;
+    }
+    .admin-header a:hover { color: var(--admin-fg); }
+    .admin-header .btn-sair {
+      background: transparent; border: 1px solid rgba(242, 242, 242, 0.3);
+      color: var(--admin-fg); font-size: var(--text-xs);
+      padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .admin-header .btn-sair:hover { background: rgba(242, 242, 242, 0.1); }
+    .admin-section { margin-bottom: var(--space-12); }
+    .admin-section h2 {
+      font-size: var(--text-lg); color: var(--ink-1);
+      border-bottom: 1px solid var(--line-soft);
+      padding-bottom: var(--space-2); margin-bottom: var(--space-5);
+    }
+    .brand-stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: var(--space-4);
+    }
+    .brand-stats-card {
+      border: 1px solid var(--line-soft); border-radius: var(--radius-md);
+      padding: var(--space-4); background: var(--surface-1);
+    }
+    .brand-stats-card h3 { margin: 0 0 var(--space-3); font-size: var(--text-md); }
+    .quota-row { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--ink-2); margin-bottom: var(--space-1); }
+    .quota-row.warn { color: #a8760a; }
+    .quota-row.block { color: var(--red); font-weight: 600; }
+    .brand-tokens { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--ink-2); }
+    table.admin-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    table.admin-table th, table.admin-table td {
+      text-align: left; padding: var(--space-2) var(--space-3);
+      border-bottom: 1px solid var(--line-soft);
+    }
+    table.admin-table th { color: var(--ink-3); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); }
+    .form-grid-full { grid-column: 1 / -1; }
+    .color-field { display: flex; align-items: center; gap: var(--space-2); }
+    .color-field input[type="color"] { width: 40px; height: 32px; padding: 0; border: none; }
+    .senha-gerada {
+      background: var(--surface-2); border: 1px solid var(--gold);
+      border-radius: var(--radius-md); padding: var(--space-4);
+      margin-top: var(--space-4); font-size: var(--text-sm); display: none;
+    }
+    .senha-gerada code { font-size: var(--text-md); font-weight: 600; }
+    .admin-erro { color: var(--red); font-size: var(--text-sm); margin-top: var(--space-2); display: none; }
+    .signup-request-item {
+      border: 1px solid var(--line-soft); border-radius: var(--radius-md);
+      margin-bottom: var(--space-4); overflow: hidden;
+    }
+    .signup-request-item summary {
+      cursor: pointer; padding: var(--space-4);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: var(--text-sm); list-style: none;
+    }
+    .signup-request-item summary::-webkit-details-marker { display: none; }
+    .signup-request-item summary strong { color: var(--ink-1); }
+    .signup-request-item summary span { color: var(--ink-3); }
+    .signup-request-item .review-form { padding: 0 var(--space-4) var(--space-4); max-width: none; }
+    .signup-request-item[data-status="aprovado"] summary { background: rgba(60, 160, 70, 0.08); }
+    .signup-request-item[data-status="rejeitado"] summary { background: rgba(176, 65, 62, 0.08); }
+  </style>
+</head>
+<body>
+  <header class="admin-header">
+    <span class="admin-title">Administração</span>
+    <nav>
+      <a href="/">&larr; Central de Conteúdo</a>
+      <button type="button" class="btn-sair" id="btn-sair-admin">Sair</button>
+    </nav>
+  </header>
+
+  <div class="admin-content">
+  <section class="admin-section">
+    <h2>Estatísticas por brand</h2>
+    <div id="brand-stats" class="brand-stats-grid"><p class="loading">Carregando…</p></div>
+  </section>
+
+  <section class="admin-section">
+    <h2>Usuários cadastrados</h2>
+    <div id="users-table"><p class="loading">Carregando…</p></div>
+  </section>
+
+  <section class="admin-section">
+    <h2>Solicitações pendentes</h2>
+    <p style="color: var(--ink-3); font-size: var(--text-sm); margin-top: -12px;">
+      Cadastro de cliente novo agora passa por aqui: alguém solicita em
+      <code>/signup</code>, você revisa/completa os prompts técnicos e aprova
+      (ou rejeita).
+    </p>
+    <div id="signup-requests-list"><p class="loading">Carregando…</p></div>
+  </section>
+
+  <!-- Template do form de revisão — clonado por solicitação em admin.js -->
+  <template id="tpl-review-form">
+    <form class="form review-form" enctype="multipart/form-data">
+      <div class="form-grid">
+        <label>Nome do cliente
+          <input type="text" name="nome" required>
+        </label>
+        <label>Slug (editável antes de aprovar)
+          <input type="text" name="slug">
+        </label>
+        <label>Email do primeiro usuário
+          <input type="email" name="email" required>
+        </label>
+        <label>Tema
+          <select name="theme">
+            <option value="light">Claro (light)</option>
+            <option value="dark">Escuro (dark)</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" name="use_image_logo" value="true" style="width:auto; display:inline-block;">
+          Mostrar logo (se enviado na solicitação)
+        </label>
+      </div>
+
+      <div class="form-grid form-grid-full">
+        <div class="color-field"><label>Navy <input type="color" name="navy"></label></div>
+        <div class="color-field"><label>Gold <input type="color" name="gold"></label></div>
+        <div class="color-field"><label>White <input type="color" name="white"></label></div>
+        <div class="color-field"><label>Cream <input type="color" name="cream"></label></div>
+        <div class="color-field"><label>Navy escuro <input type="color" name="navy_dark"></label></div>
+      </div>
+
+      <label>Conte sobre o negócio (enviado pelo solicitante — só leitura)
+        <textarea name="sobre_negocio" rows="2" readonly></textarea>
+      </label>
+      <label>Google Fonts URL (opcional)
+        <input type="text" name="google_fonts_url">
+      </label>
+      <label>Fonte de título (CSS font-family, opcional)
+        <input type="text" name="ui_heading_font" placeholder="'Unbounded', sans-serif">
+      </label>
+      <label>Fonte de corpo (CSS font-family, opcional)
+        <input type="text" name="ui_body_font" placeholder="'Space Grotesk', sans-serif">
+      </label>
+      <label>Sufixo do prompt de imagem
+        <textarea name="image_prompt_suffix" rows="2" placeholder="ex.: professional event photography, cinematic lighting..."></textarea>
+      </label>
+      <label>Negative prompt (Ideogram)
+        <textarea name="ideogram_negative_prompt" rows="2"></textarea>
+      </label>
+      <label>Nome de quem aprova (metadata de export)
+        <input type="text" name="approved_by">
+      </label>
+      <label>System prompt (posts simples)
+        <textarea name="system_prompt" rows="6"></textarea>
+      </label>
+      <label>System prompt (carrossel)
+        <textarea name="system_prompt_carousel" rows="6"></textarea>
+      </label>
+      <label>Motivo da rejeição (opcional, só se for rejeitar)
+        <input type="text" name="motivo_rejeicao">
+      </label>
+
+      <div style="display: flex; gap: var(--space-3); margin-top: var(--space-2);">
+        <button type="button" class="btn btn-approve review-aprovar">Aprovar e criar cliente</button>
+        <button type="button" class="btn btn-adjust review-rejeitar">Rejeitar</button>
+      </div>
+      <p class="admin-erro"></p>
+      <div class="senha-gerada"></div>
+    </form>
+  </template>
+
+  <section class="admin-section">
+    <h2>Novo usuário (brand existente)</h2>
+    <form id="form-novo-usuario" class="form">
+      <label>Email
+        <input type="email" name="email" required>
+      </label>
+      <label>Role
+        <select name="role" id="novo-usuario-role">
+          <option value="cliente">Cliente</option>
+          <option value="admin">Admin</option>
+        </select>
+      </label>
+      <label id="novo-usuario-brand-label">Brand
+        <select name="brand_slug" id="novo-usuario-brand"></select>
+      </label>
+      <button type="submit" class="btn btn-approve">Criar usuário</button>
+      <p class="admin-erro" id="erro-novo-usuario"></p>
+      <div class="senha-gerada" id="senha-novo-usuario"></div>
+    </form>
+  </section>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
