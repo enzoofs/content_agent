@@ -60,6 +60,7 @@ function renderTopbarActions() {
   if (!el || !ME) return;
 
   let seletorHtml = "";
+  let adminLinkHtml = "";
   if (ME.role === "admin") {
     const opcoes = ME.available_brands.map(slug => {
       const sel = slug === ME.brand_slug ? "selected" : "";
@@ -68,9 +69,10 @@ function renderTopbarActions() {
     seletorHtml = `<select id="admin-brand-select" class="admin-brand-select">
       <option value="">Escolher brand…</option>${opcoes}
     </select>`;
+    adminLinkHtml = `<a href="/admin" class="navlink">Admin</a>`;
   }
 
-  el.innerHTML = `${seletorHtml}<button class="btn btn-adjust" id="btn-logout">Sair</button>`;
+  el.innerHTML = `${adminLinkHtml}${seletorHtml}<button class="btn btn-adjust" id="btn-logout">Sair</button>`;
 
   document.getElementById("btn-logout").addEventListener("click", async () => {
     await fetch("/logout", { method: "POST" });

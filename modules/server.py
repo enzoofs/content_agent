@@ -943,6 +943,15 @@ def build_app() -> Flask:
         html = html.replace("{{BRAND_CSS_VARS}}", _brand_css_vars())
         return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+    @app.route("/admin")
+    @login_required
+    def admin_page():
+        """Página de admin (stats + cadastro de clientes) — sem topbar de campanhas."""
+        if current_user.role != "admin":
+            abort(403)
+        html = (settings.APPROVAL_UI_DIR / "admin.html").read_text(encoding="utf-8")
+        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
     @app.route("/logo.png")
     def logo():
         # Legacy: mantida pra compat caso algum link antigo aponte pra /logo.png

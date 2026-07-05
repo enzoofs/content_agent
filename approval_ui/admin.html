@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Central de Conteúdo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Página deliberadamente sem tema de brand (é uma área multi-brand) —
+       mesmo espírito de login.html: só os tokens default de style.css. */
+    body { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-6) var(--space-16); }
+    .admin-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: var(--space-8);
+    }
+    .admin-header h1 {
+      font-family: "Playfair Display", serif;
+      font-size: var(--text-3xl);
+      color: var(--ink-1);
+      margin: 0;
+    }
+    .admin-header a { color: var(--ink-3); font-size: var(--text-sm); text-decoration: none; }
+    .admin-header a:hover { color: var(--ink-1); }
+    .admin-section { margin-bottom: var(--space-12); }
+    .admin-section h2 {
+      font-size: var(--text-lg); color: var(--ink-1);
+      border-bottom: 1px solid var(--line-soft);
+      padding-bottom: var(--space-2); margin-bottom: var(--space-5);
+    }
+    .brand-stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: var(--space-4);
+    }
+    .brand-stats-card {
+      border: 1px solid var(--line-soft); border-radius: var(--radius-md);
+      padding: var(--space-4); background: var(--surface-1);
+    }
+    .brand-stats-card h3 { margin: 0 0 var(--space-3); font-size: var(--text-md); }
+    .quota-row { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--ink-2); margin-bottom: var(--space-1); }
+    .quota-row.warn { color: #a8760a; }
+    .quota-row.block { color: var(--red); font-weight: 600; }
+    .brand-tokens { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--ink-2); }
+    table.admin-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    table.admin-table th, table.admin-table td {
+      text-align: left; padding: var(--space-2) var(--space-3);
+      border-bottom: 1px solid var(--line-soft);
+    }
+    table.admin-table th { color: var(--ink-3); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); }
+    .form-grid-full { grid-column: 1 / -1; }
+    .color-field { display: flex; align-items: center; gap: var(--space-2); }
+    .color-field input[type="color"] { width: 40px; height: 32px; padding: 0; border: none; }
+    .senha-gerada {
+      background: var(--surface-2); border: 1px solid var(--gold);
+      border-radius: var(--radius-md); padding: var(--space-4);
+      margin-top: var(--space-4); font-size: var(--text-sm); display: none;
+    }
+    .senha-gerada code { font-size: var(--text-md); font-weight: 600; }
+    .admin-erro { color: var(--red); font-size: var(--text-sm); margin-top: var(--space-2); display: none; }
+  </style>
+</head>
+<body>
+  <div class="admin-header">
+    <h1>Administração</h1>
+    <a href="/">&larr; Voltar pra central</a>
+  </div>
+
+  <section class="admin-section">
+    <h2>Estatísticas por brand</h2>
+    <div id="brand-stats" class="brand-stats-grid"><p class="loading">Carregando…</p></div>
+  </section>
+
+  <section class="admin-section">
+    <h2>Usuários cadastrados</h2>
+    <div id="users-table"><p class="loading">Carregando…</p></div>
+  </section>
+
+  <section class="admin-section">
+    <h2>Novo cliente</h2>
+    <p style="color: var(--ink-3); font-size: var(--text-sm); margin-top: -12px;">
+      Cria um brand novo (cores, prompts, logo opcional) + o primeiro usuário desse cliente.
+    </p>
+    <form id="form-novo-cliente" class="form" enctype="multipart/form-data">
+      <div class="form-grid">
+        <label>Nome do cliente
+          <input type="text" name="nome" required placeholder="ex.: Acme Advocacia">
+        </label>
+        <label>Slug (opcional — gerado do nome se vazio)
+          <input type="text" name="slug" placeholder="ex.: acme_advocacia">
+        </label>
+        <label>Email do primeiro usuário
+          <input type="email" name="email" required>
+        </label>
+        <label>Tema
+          <select name="theme">
+            <option value="light">Claro (light)</option>
+            <option value="dark">Escuro (dark)</option>
+          </select>
+        </label>
+        <label>Logo (opcional, PNG/JPG/WEBP até 5MB)
+          <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp">
+        </label>
+        <label>
+          <input type="checkbox" name="use_image_logo" value="true" checked style="width:auto; display:inline-block;">
+          Mostrar logo enviado (sem logo, vira só o nome)
+        </label>
+      </div>
+
+      <div class="form-grid form-grid-full">
+        <div class="color-field"><label>Navy <input type="color" name="navy" value="#272D4D"></label></div>
+        <div class="color-field"><label>Gold <input type="color" name="gold" value="#E3B644"></label></div>
+        <div class="color-field"><label>White <input type="color" name="white" value="#FFFFFF"></label></div>
+        <div class="color-field"><label>Cream <input type="color" name="cream" value="#F5F0E8"></label></div>
+        <div class="color-field"><label>Navy escuro <input type="color" name="navy_dark" value="#1A2038"></label></div>
+      </div>
+
+      <label>Google Fonts URL (opcional)
+        <input type="text" name="google_fonts_url" placeholder="https://fonts.googleapis.com/css2?family=...">
+      </label>
+      <label>Fonte de título (CSS font-family, opcional)
+        <input type="text" name="ui_heading_font" placeholder="'Unbounded', sans-serif">
+      </label>
+      <label>Fonte de corpo (CSS font-family, opcional)
+        <input type="text" name="ui_body_font" placeholder="'Space Grotesk', sans-serif">
+      </label>
+      <label>Sufixo do prompt de imagem
+        <textarea name="image_prompt_suffix" rows="2" placeholder="ex.: professional event photography, cinematic lighting..."></textarea>
+      </label>
+      <label>Negative prompt (Ideogram)
+        <textarea name="ideogram_negative_prompt" rows="2"></textarea>
+      </label>
+      <label>Nome de quem aprova (metadata de export)
+        <input type="text" name="approved_by">
+      </label>
+      <label>System prompt (posts simples)
+        <textarea name="system_prompt" rows="6"></textarea>
+      </label>
+      <label>System prompt (carrossel)
+        <textarea name="system_prompt_carousel" rows="6"></textarea>
+      </label>
+
+      <button type="submit" class="btn btn-approve">Cadastrar cliente</button>
+      <p class="admin-erro" id="erro-novo-cliente"></p>
+      <div class="senha-gerada" id="senha-novo-cliente"></div>
+    </form>
+  </section>
+
+  <section class="admin-section">
+    <h2>Novo usuário (brand existente)</h2>
+    <form id="form-novo-usuario" class="form">
+      <label>Email
+        <input type="email" name="email" required>
+      </label>
+      <label>Role
+        <select name="role" id="novo-usuario-role">
+          <option value="cliente">Cliente</option>
+          <option value="admin">Admin</option>
+        </select>
+      </label>
+      <label id="novo-usuario-brand-label">Brand
+        <select name="brand_slug" id="novo-usuario-brand"></select>
+      </label>
+      <button type="submit" class="btn btn-approve">Criar usuário</button>
+      <p class="admin-erro" id="erro-novo-usuario"></p>
+      <div class="senha-gerada" id="senha-novo-usuario"></div>
+    </form>
+  </section>
+
+  <script src="admin.js"></script>
+</body>
+</html>

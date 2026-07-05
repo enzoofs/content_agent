@@ -201,3 +201,22 @@ def test_brand_novo_aparece_em_available_brands(client):
     client.post("/api/admin/clients", json={"nome": "Integra Teste", "email": "integra@teste.com"})
     data = client.get("/api/me").get_json()
     assert "integra_teste" in data["available_brands"]
+
+
+# ---------- página /admin ----------
+def test_admin_page_403_pra_cliente(client):
+    _login_cliente(client)
+    assert client.get("/admin").status_code == 403
+
+
+def test_admin_page_200_pra_admin(client):
+    _login_admin(client)
+    res = client.get("/admin")
+    assert res.status_code == 200
+    assert b"Administra" in res.data
+
+
+def test_admin_page_redireciona_deslogado(client):
+    res = client.get("/admin")
+    assert res.status_code == 302
+    assert res.headers["Location"] == "/login"
