@@ -14,6 +14,7 @@ import pytest
 
 from config import settings
 from modules import campaign_store, server
+from tests import _auth_helpers
 
 CID = "2099-01-01_teste-server"
 
@@ -25,7 +26,9 @@ def client(monkeypatch):
     monkeypatch.setattr(server, "_iniciar_regeracao_async", lambda cid, nota: None)
     app = server.build_app()
     app.config.update(TESTING=True)
-    yield app.test_client()
+    c = app.test_client()
+    _auth_helpers.login(c)  # sessão de um cliente mendes_vaz autenticado
+    yield c
     shutil.rmtree(settings.CAMPAIGNS_DIR / CID, ignore_errors=True)
     for f in settings.EXPORTS_DIR.glob(f"{CID}_*"):
         f.unlink(missing_ok=True)

@@ -113,6 +113,12 @@ class Brand:
     build_user_message_carousel: Callable[[dict, str], str] = field(default=lambda b, n="": "")
 
 
+# Brands existentes — tupla explícita (só 2 hoje, não vale a abstração de
+# escanear o filesystem). Usado pelo login multi-tenant pra validar contra
+# qual brand um admin pode alternar (POST /api/admin/brand).
+AVAILABLE_BRANDS = ("mendes_vaz", "gui_raw")
+
+
 def load(slug: str) -> Brand:
     """
     Carrega o brand pelo slug. Lança ModuleNotFoundError se não existir.

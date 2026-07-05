@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from modules import server, store
+from tests import _auth_helpers
 
 
 # ---------- Helpers ----------
@@ -86,6 +87,7 @@ def client():
     app = server.build_app()
     app.config["TESTING"] = True
     with app.test_client() as c:
+        _auth_helpers.login(c)
         yield c
 
 

@@ -21,9 +21,9 @@ Estáticos:
 
 from __future__ import annotations
 
-import hmac
 import json
 import os
+import secrets
 import threading
 import traceback
 import webbrowser
@@ -31,11 +31,21 @@ import webbrowser
 import io
 import zipfile
 
-from flask import Flask, Response, abort, jsonify, request, send_file, send_from_directory
+from flask import Flask, Response, abort, g, jsonify, request, send_file, send_from_directory, session
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
 from waitress import serve as waitress_serve
+from werkzeug.security import check_password_hash
 
 from config import settings
-from config.brands import BriefingField
+from config.brands import AVAILABLE_BRANDS, BriefingField
+from config import brands as brands_module
 from modules import (
     briefing_parser,
     campaign_store,
@@ -45,8 +55,38 @@ from modules import (
     pipeline,
     quotas,
     store,
+    users_store,
     utils,
 )
+
+
+# --------------------------------------------------------------------------
+# Autenticação (flask-login) — usuário determina qual brand fica ativo
+# --------------------------------------------------------------------------
+class AuthUser(UserMixin):
+    """Wrapper fino sobre uma linha de `users` pro contrato do flask-login."""
+
+    def __init__(self, row: dict):
+        self.id = row["id"]
+        self.email = row["email"]
+        self.brand_slug = row["brand_slug"]
+        self.role = row["role"]
+
+    def get_id(self) -> str:
+        return str(self.id)
+
+
+def _active_brand_slug() -> str | None:
+    """
+    Resolve o slug do brand ativo pra sessão atual.
+
+    - role="cliente": sempre o brand fixo do usuário.
+    - role="admin": o brand escolhido na sessão (POST /api/admin/brand),
+        ou None se ainda não escolheu nenhum (frontend mostra o seletor).
+    """
+    if current_user.role == "admin":
+        return session.get("active_brand")
+    return current_user.brand_slug
 
 
 # --------------------------------------------------------------------------
@@ -128,7 +168,9 @@ _DEFAULT_BRIEFING_FIELDS = (
 
 def _brand_briefing_fields() -> tuple[BriefingField, ...]:
     """Retorna o schema do brand ativo, com fallback pro default M&V-shaped."""
-    return settings.brand.briefing_fields or _DEFAULT_BRIEFING_FIELDS
+    if g.brand is None:
+        return _DEFAULT_BRIEFING_FIELDS
+    return g.brand.briefing_fields or _DEFAULT_BRIEFING_FIELDS
 
 
 def _serialize_briefing_field(f: BriefingField) -> dict:
@@ -151,8 +193,22 @@ def _serialize_briefing_field(f: BriefingField) -> dict:
 
 
 def _brand_payload() -> dict:
-    """Metadata do brand ativo pra UI consumir via /api/brand."""
-    b = settings.brand
+    """
+    Metadata do brand ativo pra UI consumir via /api/brand.
+
+    Quando g.brand é None (admin sem brand escolhido ainda), devolve um
+    payload neutro — a UI detecta `slug: null` e mostra o seletor de brand.
+    """
+    if g.brand is None:
+        return {
+            "nome": None,
+            "slug": None,
+            "colors": {},
+            "fonts": {},
+            "logo_url": None,
+            "briefing_fields": [_serialize_briefing_field(f) for f in _DEFAULT_BRIEFING_FIELDS],
+        }
+    b = g.brand
     return {
         "nome": b.nome,
         "slug": b.slug,
@@ -177,7 +233,9 @@ def _brand_css_vars() -> str:
     - ui_heading_font / ui_body_font: força a fonte do brand em .brand-name,
       .page-title e body (sobrepõe Playfair/Montserrat default do M&V).
     """
-    b = settings.brand
+    if g.brand is None:
+        return ""
+    b = g.brand
     c = b.colors
     root_overrides = []
     if "navy" in c:
@@ -286,15 +344,17 @@ def _brand_logo_tag() -> str:
     Render do <img> do logo OU string vazia quando o brand é typographic.
     Usado pra substituir {{BRAND_LOGO_TAG}} no index.html.
     """
-    if not settings.brand.use_image_logo:
+    if g.brand is None or not g.brand.use_image_logo:
         return ""
-    nome_esc = settings.brand.nome.replace('"', "&quot;")
+    nome_esc = g.brand.nome.replace('"', "&quot;")
     return f'<img src="/brand-logo" alt="{nome_esc}" class="brand-logo">'
 
 
 def _brand_google_fonts_link() -> str:
     """Link adicional do Google Fonts do brand (vazio se não definido)."""
-    url = settings.brand.google_fonts_url
+    if g.brand is None:
+        return ""
+    url = g.brand.google_fonts_url
     if not url:
         return ""
     return f'<link href="{url}" rel="stylesheet">'
@@ -379,6 +439,28 @@ def _iniciar_regeracao_async(campaign_id: str, nota: str) -> None:
 
 
 # --------------------------------------------------------------------------
+# Guarda de posse (isolamento entre brands)
+# --------------------------------------------------------------------------
+def _checar_posse(campaign_id: str) -> dict:
+    """
+    Carrega a campanha e garante que pertence ao brand ativo (ou que o
+    usuário é admin, que enxerga tudo).
+
+    404 (não 403) em caso de acesso cruzado — evita confirmar pra um cliente
+    que existe uma campanha de outro brand com aquele id.
+
+    Raises:
+        werkzeug.exceptions.NotFound: campanha inexistente OU de outro brand.
+    """
+    campanha = campaign_store.read_state(campaign_id)
+    if campanha is None:
+        abort(404, description=f"Campanha {campaign_id} não encontrada.")
+    if current_user.role != "admin" and campanha.get("brand_slug") != (g.brand.slug if g.brand else None):
+        abort(404, description=f"Campanha {campaign_id} não encontrada.")
+    return campanha
+
+
+# --------------------------------------------------------------------------
 # Montagem do payload de uma campanha para a UI
 # --------------------------------------------------------------------------
 def _campaign_payload(campaign_id: str) -> dict:
@@ -388,9 +470,7 @@ def _campaign_payload(campaign_id: str) -> dict:
     image_url}]` em vez de um único `composed_image_url`. Caption/cta/hashtags
     ficam no nível da opção (mesmo padrão do Instagram).
     """
-    estado = campaign_store.read_state(campaign_id)
-    if estado is None:
-        abort(404, description=f"Campanha {campaign_id} não encontrada.")
+    estado = _checar_posse(campaign_id)
 
     briefing = campaign_store.read_briefing(campaign_id) or {}
 
@@ -565,37 +645,106 @@ def build_app() -> Flask:
     """Cria a app Flask da central (persistente, multi-campanha)."""
     app = Flask(__name__, static_folder=None)
 
-    # ---- HTTP Basic Auth (opcional) ----
-    # Protege a SPA quando exposta na internet (Fly.io). Em dev local
-    # (sem as env vars) fica desligado pra não atrapalhar.
-    # Comparação com hmac.compare_digest evita timing attack na senha.
-    _auth_user = os.getenv("BASIC_AUTH_USER")
-    _auth_pass = os.getenv("BASIC_AUTH_PASS")
+    # ---- Sessão / login (flask-login) ----
+    # FLASK_SECRET_KEY ausente = chave efêmera por processo (dev local "só
+    # funciona", igual o Basic Auth antigo) — sessões não sobrevivem a
+    # restart do servidor nesse caso.
+    secret = os.getenv("FLASK_SECRET_KEY")
+    if not secret:
+        secret = secrets.token_hex(32)
+        print("⚠️  FLASK_SECRET_KEY não configurada — usando chave efêmera "
+              "(sessões não sobrevivem a um restart do servidor).")
+    app.secret_key = secret
+
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+
+    @login_manager.user_loader
+    def load_user(user_id: str):
+        row = users_store.get_by_id(int(user_id))
+        return AuthUser(row) if row else None
+
     # Endpoint público p/ healthcheck do Fly.io — precisa ficar livre de auth
     @app.route("/health")
     def _health():
         return "ok", 200
 
-    if _auth_user and _auth_pass:
-        @app.before_request
-        def _require_basic_auth():
-            # /health fica sempre aberto pra Fly conseguir checar
-            if request.path == "/health":
-                return None
-            auth = request.authorization
-            ok = (
-                auth is not None
-                and auth.username is not None
-                and auth.password is not None
-                and hmac.compare_digest(auth.username, _auth_user)
-                and hmac.compare_digest(auth.password, _auth_pass)
-            )
-            if not ok:
-                return Response(
-                    "Autenticação necessária.",
-                    status=401,
-                    headers={"WWW-Authenticate": 'Basic realm="Mendes & Vaz Social"'},
-                )
+    _ROTAS_PUBLICAS = {"/health", "/login", "/logout"}
+
+    @app.before_request
+    def _require_login():
+        if request.path in _ROTAS_PUBLICAS:
+            return None
+        if current_user.is_authenticated:
+            return None
+        if request.path.startswith("/api/"):
+            return jsonify({"erro": "Autenticação necessária."}), 401
+        return Response(status=302, headers={"Location": "/login"})
+
+    @app.before_request
+    def _resolve_brand():
+        """Popula g.brand pra sessão atual (None se não-autenticado ou admin sem brand escolhido)."""
+        if not current_user.is_authenticated:
+            g.brand = None
+            return
+        slug = _active_brand_slug()
+        g.brand = brands_module.load(slug) if slug else None
+
+    @app.route("/login", methods=["GET"])
+    def login_form():
+        # Placeholder simples — PR4 substitui por approval_ui/login.html.
+        return (
+            "<form method='post' action='/login'>"
+            "<input name='email' placeholder='email'>"
+            "<input name='senha' type='password' placeholder='senha'>"
+            "<button type='submit'>Entrar</button></form>"
+        ), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+    @app.route("/login", methods=["POST"])
+    def login_submit():
+        if request.is_json:
+            body = request.get_json(force=True)
+            email, senha = body.get("email", ""), body.get("senha", "")
+        else:
+            email, senha = request.form.get("email", ""), request.form.get("senha", "")
+        row = users_store.get_by_email(email)
+        if row is None or not check_password_hash(row["senha_hash"], senha):
+            if request.is_json:
+                return jsonify({"erro": "Email ou senha inválidos."}), 401
+            return "Email ou senha inválidos.", 401
+        login_user(AuthUser(row))
+        if request.is_json:
+            return jsonify({"status": "ok"})
+        return Response(status=302, headers={"Location": "/"})
+
+    @app.route("/logout", methods=["POST"])
+    @login_required
+    def logout_submit():
+        logout_user()
+        session.pop("active_brand", None)
+        return Response(status=302, headers={"Location": "/login"})
+
+    @app.route("/api/me", methods=["GET"])
+    @login_required
+    def api_me():
+        return jsonify({
+            "email": current_user.email,
+            "role": current_user.role,
+            "brand_slug": _active_brand_slug(),
+            "available_brands": list(AVAILABLE_BRANDS) if current_user.role == "admin" else [],
+        })
+
+    @app.route("/api/admin/brand", methods=["POST"])
+    @login_required
+    def api_admin_brand():
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode trocar de brand."}), 403
+        body = request.get_json(force=True) or {}
+        slug = body.get("slug")
+        if slug not in AVAILABLE_BRANDS:
+            return jsonify({"erro": f"Brand desconhecido: {slug!r}."}), 400
+        session["active_brand"] = slug
+        return jsonify({"status": "ok", "brand_slug": slug})
 
     # ---- Estáticos / UI ----
     @app.route("/")
@@ -621,7 +770,8 @@ def build_app() -> Flask:
         # - {{BRAND_GOOGLE_FONTS}}: <link> extra de Google Fonts do brand
         # - {{BRAND_CSS_VARS}}: <style> com paleta/fontes/dark-theme overrides
         from html import escape as _esc
-        html = html.replace("{{BRAND_NAME}}", _esc(settings.brand.nome))
+        nome = g.brand.nome if g.brand else "Central de Conteúdo"
+        html = html.replace("{{BRAND_NAME}}", _esc(nome))
         html = html.replace("{{BRAND_LOGO_TAG}}", _brand_logo_tag())
         html = html.replace("{{BRAND_GOOGLE_FONTS}}", _brand_google_fonts_link())
         html = html.replace("{{BRAND_CSS_VARS}}", _brand_css_vars())
@@ -630,12 +780,14 @@ def build_app() -> Flask:
     @app.route("/logo.png")
     def logo():
         # Legacy: mantida pra compat caso algum link antigo aponte pra /logo.png
-        return send_from_directory(settings.LOGO_PATH.parent, settings.LOGO_PATH.name)
+        logo_path = g.brand.logo_path if g.brand else settings.LOGO_PATH
+        return send_from_directory(logo_path.parent, logo_path.name)
 
     @app.route("/brand-logo")
     def brand_logo():
         """Serve o logo do brand ativo (config/brands/<slug>.py:logo_path)."""
-        return send_from_directory(settings.LOGO_PATH.parent, settings.LOGO_PATH.name)
+        logo_path = g.brand.logo_path if g.brand else settings.LOGO_PATH
+        return send_from_directory(logo_path.parent, logo_path.name)
 
     @app.route("/api/brand", methods=["GET"])
     def api_brand():
@@ -644,15 +796,22 @@ def build_app() -> Flask:
 
     @app.route("/composed/<cid>/<path:filename>")
     def composed(cid: str, filename: str):
+        _checar_posse(cid)
         return send_from_directory(settings.CAMPAIGNS_DIR / cid / "composed", filename)
 
     # ---- API ----
     @app.route("/api/campaigns", methods=["GET"])
     def api_listar():
-        return jsonify(campaign_store.listar())
+        # Admin sem brand escolhido ainda: lista vazia (frontend mostra o seletor).
+        if g.brand is None:
+            return jsonify([])
+        return jsonify(campaign_store.listar(brand_slug=g.brand.slug))
 
     @app.route("/api/campaigns", methods=["POST"])
     def api_criar():
+        if g.brand is None:
+            return jsonify({"erro": "Escolha um brand antes de criar uma campanha."}), 400
+
         # Aceita JSON (fluxo padrão) ou multipart/form-data (quando o operador
         # envia uma foto pra usar como fundo em vez do Ideogram).
         upload_file = None
@@ -666,7 +825,7 @@ def build_app() -> Flask:
 
         # 1) Quota antes de qualquer parse — falha cedo, sem custo
         try:
-            quotas.verificar_pode_criar()
+            quotas.verificar_pode_criar(g.brand.slug)
         except quotas.QuotaExcedidaError as e:
             return jsonify({
                 "erro": e.mensagem,
@@ -691,7 +850,7 @@ def build_app() -> Flask:
                 return jsonify({"erro": str(e)}), 400
             briefing["upload_filename"] = upload_name
 
-        campaign_store.criar(briefing)
+        campaign_store.criar(briefing, brand_slug=g.brand.slug)
         utils.log(briefing["campaign_id"], "server: campanha criada, iniciando geração.")
         _iniciar_geracao_async(briefing)
         return jsonify({"campaign_id": briefing["campaign_id"], "status": "gerando"}), 201
@@ -699,7 +858,9 @@ def build_app() -> Flask:
     @app.route("/api/quotas", methods=["GET"])
     def api_quotas():
         """Snapshot atual das quotas — UI mostra banner amarelo/vermelho conforme."""
-        return jsonify(quotas.snapshot())
+        if g.brand is None:
+            return jsonify({"itens": [], "bloqueado": False, "proximo_reset": ""})
+        return jsonify(quotas.snapshot(g.brand.slug))
 
     @app.route("/api/campaigns/<cid>", methods=["GET"])
     def api_campanha(cid: str):
@@ -707,6 +868,7 @@ def build_app() -> Flask:
 
     @app.route("/api/campaigns/<cid>/approve", methods=["POST"])
     def api_approve(cid: str):
+        _checar_posse(cid)
         body = request.get_json(force=True)
         option_id = int(body["option_id"])
         data_agendada = body.get("data_agendada") or None
@@ -740,9 +902,7 @@ def build_app() -> Flask:
         (referência humana). O cliente escolhe onde salvar no diálogo do browser
         — não precisa saber a estrutura de pastas do servidor.
         """
-        estado = campaign_store.read_state(cid)
-        if estado is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
+        estado = _checar_posse(cid)
         if estado.get("status") != "aprovada" or not estado.get("option_aprovada"):
             return jsonify({"erro": "Só dá pra baixar campanha aprovada."}), 409
 
@@ -782,9 +942,7 @@ def build_app() -> Flask:
         o registro logo depois e deixar tudo inconsistente). Operador pode
         esperar a geração terminar ou cair em 'erro' antes de tentar de novo.
         """
-        estado = campaign_store.read_state(cid)
-        if estado is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
+        estado = _checar_posse(cid)
         if estado["status"] == "gerando":
             return jsonify({
                 "erro": "Não dá pra apagar campanha em geração. Espere terminar ou cair em erro.",
@@ -802,11 +960,12 @@ def build_app() -> Flask:
         Não copia copy/imagens — a regeração via IA produz variações novas.
         Útil pra "quero outra rodada do mesmo tema" ou pivot de pequena escala.
         """
+        _checar_posse(cid)
+        if g.brand is None:
+            return jsonify({"erro": "Escolha um brand antes de duplicar uma campanha."}), 400
         original = campaign_store.read_briefing(cid)
-        if original is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
         try:
-            quotas.verificar_pode_criar()
+            quotas.verificar_pode_criar(g.brand.slug)
         except quotas.QuotaExcedidaError as e:
             return jsonify({
                 "erro": e.mensagem, "tipo": "quota_excedida",
@@ -830,7 +989,7 @@ def build_app() -> Flask:
         except ValueError as e:
             return jsonify({"erro": f"Briefing original inválido: {e}"}), 400
 
-        campaign_store.criar(briefing)
+        campaign_store.criar(briefing, brand_slug=g.brand.slug)
         utils.log(briefing["campaign_id"], f"server: duplicado de {cid}, iniciando geração.")
         _iniciar_geracao_async(briefing)
         return jsonify({
@@ -841,6 +1000,7 @@ def build_app() -> Flask:
 
     @app.route("/api/campaigns/<cid>/adjust", methods=["POST"])
     def api_adjust(cid: str):
+        _checar_posse(cid)
         body = request.get_json(force=True)
         option_id = int(body["option_id"])
         nota = body.get("nota", "")
@@ -873,13 +1033,12 @@ def build_app() -> Flask:
         Sobrescreve a versão atual do copy (não bumpa copy_version — bump é só
         pra regeração via LLM). Custo zero de API.
         """
+        _checar_posse(cid)
         body = request.get_json(force=True)
         option_id = int(body["option_id"])
         fields = body.get("fields", {})
 
         briefing = campaign_store.read_briefing(cid)
-        if briefing is None:
-            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
         opcoes = campaign_store.get_copy(cid)
         if opcoes is None:
             return jsonify({"erro": "Copy não encontrado para esta campanha."}), 404
@@ -905,23 +1064,28 @@ def build_app() -> Flask:
     # ---- Templates de briefing (presets reutilizáveis) ----
     @app.route("/api/templates", methods=["GET"])
     def api_templates_listar():
-        return jsonify(store.list_templates())
+        if g.brand is None:
+            return jsonify([])
+        return jsonify(store.list_templates(brand_slug=g.brand.slug))
 
     @app.route("/api/templates", methods=["POST"])
     def api_templates_salvar():
+        if g.brand is None:
+            return jsonify({"erro": "Escolha um brand antes de salvar um template."}), 400
         body = request.get_json(force=True) or {}
         nome = (body.get("nome") or "").strip()
         if not nome:
             return jsonify({"erro": "Campo 'nome' é obrigatório."}), 400
         try:
-            tpl = store.save_template(nome, body)
+            tpl = store.save_template(nome, body, brand_slug=g.brand.slug)
         except ValueError as e:
             return jsonify({"erro": str(e)}), 400
         return jsonify(tpl), 201
 
     @app.route("/api/templates/<int:template_id>", methods=["DELETE"])
     def api_templates_apagar(template_id: int):
-        if not store.delete_template(template_id):
+        brand_slug = None if current_user.role == "admin" else (g.brand.slug if g.brand else None)
+        if not store.delete_template(template_id, brand_slug=brand_slug):
             return jsonify({"erro": f"Template {template_id} não encontrado."}), 404
         return jsonify({"status": "apagado", "id": template_id})
 
@@ -946,7 +1110,7 @@ def serve() -> None:
     app = build_app()
     url = f"http://{settings.APPROVAL_HOST}:{settings.APPROVAL_PORT}/"
 
-    print(f"✓ Central de controle {settings.brand.nome} em {url}")
+    print(f"✓ Central de controle (login multi-brand) em {url}")
     print("  (Ctrl+C para encerrar)")
     try:
         webbrowser.open(url)

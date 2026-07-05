@@ -26,6 +26,7 @@ from modules import (
     server,
     store,
 )
+from tests import _auth_helpers
 
 
 def _mock_copy_options() -> list[dict]:
@@ -87,6 +88,7 @@ def test_smoke_pipeline_mocked():
 
         # API da central (sem subir servidor real)
         client = server.build_app().test_client()
+        _auth_helpers.login(client)
         resp = client.get(f"/api/campaigns/{campaign_id}")
         assert resp.status_code == 200
         data = resp.get_json()
