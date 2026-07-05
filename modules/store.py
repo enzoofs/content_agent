@@ -73,8 +73,9 @@ CREATE TABLE IF NOT EXISTS copy_versions (
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_campaigns_data_agendada ON campaigns(data_agendada);
-CREATE INDEX IF NOT EXISTS idx_campaigns_brand_slug ON campaigns(brand_slug);
-CREATE INDEX IF NOT EXISTS idx_campaigns_brand_status ON campaigns(brand_slug, status);
+-- Índices de brand_slug NÃO ficam aqui: em bancos já existentes (sem a coluna
+-- ainda), CREATE TABLE IF NOT EXISTS é no-op e o CREATE INDEX quebraria antes
+-- do ALTER TABLE (abaixo, em init_db()) rodar. São criados depois do ALTER.
 
 -- Templates de briefing: preset reutilizável para acelerar criação de campanhas.
 -- Guarda apenas os campos do briefing — não vira campanha sozinho.
@@ -170,6 +171,10 @@ def init_db() -> None:
             con.execute(
                 "ALTER TABLE campaigns ADD COLUMN brand_slug TEXT NOT NULL DEFAULT 'mendes_vaz'"
             )
+        # Só depois do ALTER acima é que a coluna existe de fato — daí sim dá
+        # pra criar os índices que dependem dela (ver comentário no SCHEMA_SQL).
+        con.execute("CREATE INDEX IF NOT EXISTS idx_campaigns_brand_slug ON campaigns(brand_slug)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_campaigns_brand_status ON campaigns(brand_slug, status)")
 
         # briefing_templates: DBs antigos ganham a coluna, mas o SQLite não
         # permite ALTER TABLE pra trocar a constraint UNIQUE(nome) existente

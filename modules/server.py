@@ -669,7 +669,8 @@ def build_app() -> Flask:
     def _health():
         return "ok", 200
 
-    _ROTAS_PUBLICAS = {"/health", "/login", "/logout"}
+    # /style.css é público pra login.html conseguir carregar o CSS sem sessão.
+    _ROTAS_PUBLICAS = {"/health", "/login", "/logout", "/style.css"}
 
     @app.before_request
     def _require_login():
@@ -692,13 +693,8 @@ def build_app() -> Flask:
 
     @app.route("/login", methods=["GET"])
     def login_form():
-        # Placeholder simples — PR4 substitui por approval_ui/login.html.
-        return (
-            "<form method='post' action='/login'>"
-            "<input name='email' placeholder='email'>"
-            "<input name='senha' type='password' placeholder='senha'>"
-            "<button type='submit'>Entrar</button></form>"
-        ), 200, {"Content-Type": "text/html; charset=utf-8"}
+        html = (settings.APPROVAL_UI_DIR / "login.html").read_text(encoding="utf-8")
+        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
     @app.route("/login", methods=["POST"])
     def login_submit():
