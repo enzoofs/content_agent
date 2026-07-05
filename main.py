@@ -39,11 +39,14 @@ def _check_credenciais() -> None:
         )
 
     if settings.USE_MOCK_IMAGES:
-        # USE_MOCK_IMAGES vira True automaticamente quando IDEOGRAM_API_KEY
-        # falta (ver config/settings.py). Avisa, mas não bloqueia.
+        # USE_MOCK_IMAGES vira True automaticamente quando IMAGE_PROVIDER=ideogram
+        # e IDEOGRAM_API_KEY falta (ver config/settings.py). Avisa, mas não bloqueia.
         print(
-            "⚠️  IDEOGRAM_API_KEY não configurada (ou USE_MOCK_IMAGES=true).\n"
-            "    Arte sairá como placeholder navy/gold local (sem chamada à Ideogram)."
+            f"⚠️  Provedor de imagem '{settings.IMAGE_PROVIDER}' sem credencial "
+            "(ou USE_MOCK_IMAGES=true).\n"
+            "    Arte sairá como placeholder navy/gold local.\n"
+            "    Dica: defina IMAGE_PROVIDER=pollinations no .env para usar um "
+            "gerador gratuito sem chave."
         )
 
     print("✓ Credenciais OK (OpenAI conectada).")

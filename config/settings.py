@@ -74,7 +74,10 @@ FONTS = brand.fonts
 # Geração de copy — OpenAI (substitui a Claude API nesta fase)
 # --------------------------------------------------------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = "gpt-4o"        # configurável; troca-se aqui sem tocar nos módulos
+OPENAI_MODEL = "llama-3.3-70b-versatile"  # configurável; troca-se aqui sem tocar nos módulos
+# Se vazio, usa o endpoint oficial da OpenAI. Groq/DeepSeek/etc são compatíveis
+# com o SDK da OpenAI — só troca base_url + modelo (ver .env.example).
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL") or None
 COPY_MAX_TOKENS = 2000
 
 # Quantas variações de copy geramos por campanha
@@ -86,23 +89,30 @@ NUM_COPY_OPTIONS = 3
 OPENAI_COPY_TEMPERATURE = 0.95
 
 # --------------------------------------------------------------------------
-# Geração de arte — Ideogram
+# Geração de arte — Ideogram (pago) ou Pollinations.ai (gratuito, sem chave)
 # --------------------------------------------------------------------------
+# Escolhe o provedor via .env. Default "ideogram" mantém o comportamento
+# original; "pollinations" usa a API gratuita enquanto não há budget Ideogram.
+IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "ideogram").lower()
+
 IDEOGRAM_API_KEY = os.getenv("IDEOGRAM_API_KEY")
 IDEOGRAM_URL = "https://api.ideogram.ai/generate"
+
+POLLINATIONS_URL = "https://image.pollinations.ai/prompt"
+POLLINATIONS_MODEL = "flux"
 
 # Equivalência em "tokens" para 1 imagem Ideogram, usada no contador unificado
 # exposto na UI. Origem: Ideogram V_2 ≈ US$ 0.08/imagem; gpt-4o output ≈
 # US$ 0.0125/1k tokens → ~6.000 tokens equivalentes. Ajustar aqui se o modelo
-# ou o fornecedor de imagem mudar.
-IMAGE_TOKEN_EQUIVALENT = 6000
+# ou o fornecedor de imagem mudar. Pollinations é gratuito: não conta token.
+IMAGE_TOKEN_EQUIVALENT = 6000 if IMAGE_PROVIDER == "ideogram" else 0
 
-# Mock de imagens: usado quando NÃO há chave Ideogram, ou quando forçado.
-# Padrão: usar Ideogram real se houver chave. Defina USE_MOCK_IMAGES=true no
-# .env para forçar placeholders mesmo tendo a chave (debug/economia).
+# Mock de imagens: força placeholder local mesmo com credenciais disponíveis.
+# Só se aplica ao provedor Ideogram (Pollinations não precisa de chave, então
+# nunca cai em mock por falta de credencial).
 USE_MOCK_IMAGES = (
     os.getenv("USE_MOCK_IMAGES", "false").lower() == "true"
-    or not IDEOGRAM_API_KEY
+    or (IMAGE_PROVIDER == "ideogram" and not IDEOGRAM_API_KEY)
 )
 
 IDEOGRAM_CONFIG = {
