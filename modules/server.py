@@ -946,10 +946,18 @@ def build_app() -> Flask:
     @app.route("/admin")
     @login_required
     def admin_page():
-        """Página de admin (stats + cadastro de clientes) — sem topbar de campanhas."""
+        """
+        Página de admin (stats + cadastro de clientes) — sem topbar de campanhas.
+
+        Mesmo cache-bust de admin.js que index() já faz pra app.js/style.css
+        (ver comentário lá) — sem isso o browser continua servindo a versão
+        antiga do JS depois de um deploy/alteração.
+        """
         if current_user.role != "admin":
             abort(403)
         html = (settings.APPROVAL_UI_DIR / "admin.html").read_text(encoding="utf-8")
+        js_mtime = int((settings.APPROVAL_UI_DIR / "admin.js").stat().st_mtime)
+        html = html.replace('src="admin.js"', f'src="admin.js?v={js_mtime}"')
         return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
     @app.route("/logo.png")
