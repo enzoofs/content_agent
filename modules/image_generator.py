@@ -1,11 +1,13 @@
 """
-modules/image_generator.py — Geração de arte de fundo via Ideogram.
+modules/image_generator.py — Geração de arte de fundo via Ideogram ou Pollinations.ai.
 
 Gera uma imagem de fundo (SEM texto, SEM logo) para cada variação de copy.
 O texto e o logo são adicionados depois pelo composer.
 
-Enquanto não houver IDEOGRAM_API_KEY (ou USE_MOCK_IMAGES=true), gera imagens
-placeholder navy/gold localmente via Pillow, para o pipeline rodar fim a fim.
+O provedor é escolhido por settings.IMAGE_PROVIDER ("ideogram" ou
+"pollinations"). Enquanto não houver credencial (ou USE_MOCK_IMAGES=true),
+gera imagens placeholder navy/gold localmente via Pillow, para o pipeline
+rodar fim a fim.
 
 REGRA CRÍTICA: nunca quebra o pipeline por causa de uma imagem. Após 3 falhas
 numa opção, registra no log e cai para o placeholder.
@@ -15,6 +17,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from PIL import Image, ImageDraw
@@ -137,19 +140,22 @@ def _generate_with_fallback(
     prompt: str, destino: Path, size: tuple[int, int],
     formato: str, campaign_id: str, n: int,
 ) -> None:
-    """Tenta a Ideogram até 3x; se falhar, cai para o placeholder local."""
+    """Tenta o provedor configurado (settings.IMAGE_PROVIDER) até 3x; se falhar, cai para o placeholder local."""
+    provider = settings.IMAGE_PROVIDER
+    gerar = _generate_with_ideogram if provider == "ideogram" else _generate_with_pollinations
+
     for tentativa in range(1, 4):
         try:
-            _generate_with_ideogram(prompt, destino, formato)
-            utils.log(campaign_id, f"image_generator: opção {n} gerada via Ideogram.")
+            gerar(prompt, destino, formato)
+            utils.log(campaign_id, f"image_generator: opção {n} gerada via {provider}.")
             campaign_store.add_tokens(campaign_id, settings.IMAGE_TOKEN_EQUIVALENT)
             return
         except Exception as e:
             utils.log(
                 campaign_id,
-                f"image_generator: Ideogram falhou opção {n} tentativa {tentativa}: {e}",
+                f"image_generator: {provider} falhou opção {n} tentativa {tentativa}: {e}",
             )
-            print(f"⚠️  Ideogram falhou (opção {n}, tentativa {tentativa}): {e}")
+            print(f"⚠️  {provider} falhou (opção {n}, tentativa {tentativa}): {e}")
 
     utils.log(campaign_id, f"image_generator: opção {n} caiu para placeholder após 3 falhas.")
     print(f"   → Usando placeholder local para a opção {n}.")
@@ -198,6 +204,30 @@ def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
 
     # Normaliza para o tamanho exato do post (Ideogram entrega 1024-base)
     _resize_to_post(destino, settings.POST_SIZES[formato])
+
+
+def _generate_with_pollinations(prompt: str, destino: Path, formato: str) -> None:
+    """
+    Chama a Pollinations.ai (gratuita, sem API key), baixa o PNG e salva em `destino`.
+
+    Raises:
+        Exception: em qualquer falha de rede ou resposta inesperada.
+    """
+    w, h = settings.POST_SIZES[formato]
+    url = f"{settings.POLLINATIONS_URL}/{quote(prompt)}"
+    params = {
+        "width": w,
+        "height": h,
+        "model": settings.POLLINATIONS_MODEL,
+        "nologo": "true",
+    }
+    resp = requests.get(url, params=params, timeout=120)
+    if not resp.ok:
+        raise RuntimeError(f"Pollinations {resp.status_code}: {resp.text[:300]}")
+    destino.write_bytes(resp.content)
+
+    # Reamostra pro tamanho exato (a API às vezes entrega dimensões aproximadas)
+    _resize_to_post(destino, (w, h))
 
 
 def _resize_to_post(path: Path, size: tuple[int, int]) -> None:

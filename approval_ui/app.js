@@ -243,7 +243,7 @@ function renderNovo() {
   const html = renderBriefingFieldsHtml(fields);
 
   // Bloco de fundo customizado (M&V only). Permite o cliente enviar uma foto
-  // própria (escritório, time) no lugar da arte gerada pelo Ideogram, e
+  // própria (escritório, time) no lugar da arte gerada por IA, e
   // opcionalmente esconder o overlay azul pra a foto aparecer sem filtro.
   const isMV = !BRAND || !BRAND.slug || BRAND.slug === "mendes_vaz";
   const uploadHtml = isMV ? `
@@ -251,7 +251,7 @@ function renderNovo() {
       <legend>Fundo da imagem</legend>
       <label>Origem do fundo
         <select name="background_source" id="background-source">
-          <option value="ia" selected>Gerar com IA (Ideogram)</option>
+          <option value="ia" selected>Gerar com IA</option>
           <option value="upload">Enviar uma foto minha</option>
         </select>
       </label>
@@ -544,7 +544,7 @@ function startPolling(id) {
 // ---------- Progresso ----------
 const ETAPAS = [
   ["copy", "Gerando textos (copy)"],
-  ["arte", "Gerando arte (Ideogram)"],
+  ["arte", "Gerando arte"],
   ["composicao", "Compondo os posts"],
 ];
 
