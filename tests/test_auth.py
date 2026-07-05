@@ -53,6 +53,18 @@ def test_login_ok(client):
     assert res.status_code == 200
 
 
+def test_login_cliente_redireciona_pra_central(client):
+    _criar_usuario("henrique6@teste.com", "senha123", "mendes_vaz")
+    res = client.post("/login", json={"email": "henrique6@teste.com", "senha": "senha123"})
+    assert res.get_json()["redirect"] == "/"
+
+
+def test_login_admin_redireciona_direto_pro_admin(client):
+    _criar_usuario("admin3@teste.com", "senha123", None, role="admin")
+    res = client.post("/login", json={"email": "admin3@teste.com", "senha": "senha123"})
+    assert res.get_json()["redirect"] == "/admin"
+
+
 def test_login_senha_errada(client):
     _criar_usuario("henrique2@teste.com", "senha123", "mendes_vaz")
     res = client.post("/login", json={"email": "henrique2@teste.com", "senha": "errada"})

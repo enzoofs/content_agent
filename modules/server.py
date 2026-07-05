@@ -751,9 +751,13 @@ def build_app() -> Flask:
                 return jsonify({"erro": "Email ou senha inválidos."}), 401
             return "Email ou senha inválidos.", 401
         login_user(AuthUser(row))
+        # Admin cai direto em /admin — a tela de "escolha um brand" só faz
+        # sentido quando ele deliberadamente entra na central de campanhas
+        # de um cliente, não como gate obrigatório logo após o login.
+        destino = "/admin" if row["role"] == "admin" else "/"
         if request.is_json:
-            return jsonify({"status": "ok"})
-        return Response(status=302, headers={"Location": "/"})
+            return jsonify({"status": "ok", "redirect": destino})
+        return Response(status=302, headers={"Location": destino})
 
     @app.route("/logout", methods=["POST"])
     @login_required
