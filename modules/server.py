@@ -28,6 +28,7 @@ import secrets
 import sqlite3
 import threading
 import traceback
+import uuid
 import webbrowser
 
 import io
@@ -57,6 +58,7 @@ from modules import (
     exporter,
     pipeline,
     quotas,
+    signup_requests_store,
     store,
     users_store,
     utils,
@@ -406,18 +408,25 @@ def _salvar_upload(campaign_id: str, file_storage) -> str:
 
 
 # --------------------------------------------------------------------------
-# Logo de brand novo (cadastro de cliente na tela de admin)
+# Logo de brand novo (solicitação pública de cadastro)
 # --------------------------------------------------------------------------
 _LOGO_MAX_BYTES = 5 * 1024 * 1024  # 5 MB — logo não precisa do tamanho de foto de campanha
 
 
-def _salvar_logo_brand(slug: str, file_storage) -> str:
+_PENDING_LOGOS_DIR_NAME = "pending_logos"
+
+
+def _salvar_logo_pendente(file_storage) -> str:
     """
-    Persiste o logo enviado no cadastro de cliente em assets/logo_<slug>.<ext>
-    (mesma convenção dos brands hardcoded — ver config/brands/mendes_vaz.py).
+    Persiste o logo enviado numa solicitação pública (POST /api/signup-requests)
+    em assets/pending_logos/ — NÃO no nome final (assets/logo_<slug>.<ext>),
+    porque a solicitação pode ser rejeitada ou o slug pode colidir depois.
+    Só vira o arquivo final quando a solicitação é aprovada (ver
+    api_admin_aprovar_solicitacao).
 
     Returns:
-        Nome do arquivo salvo (ex.: "logo_acme.png") — vai pro brands.logo_filename.
+        Nome do arquivo salvo (ex.: "3f9a1c2b....png") — vai pro
+        signup_requests.logo_filename_pendente.
 
     Raises:
         ValueError: extensão não suportada ou arquivo vazio/gigante demais.
@@ -429,7 +438,10 @@ def _salvar_logo_brand(slug: str, file_storage) -> str:
             f"Formato de imagem não suportado: {ext or '(sem extensão)'}. "
             f"Aceitos: {sorted(_UPLOAD_EXT_PERMITIDAS)}."
         )
-    destino = settings.ASSETS_DIR / f"logo_{slug}{ext}"
+    pending_dir = settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME
+    pending_dir.mkdir(parents=True, exist_ok=True)
+    nome_arquivo = f"{uuid.uuid4().hex}{ext}"
+    destino = pending_dir / nome_arquivo
     file_storage.save(str(destino))
     tamanho = destino.stat().st_size
     if tamanho == 0:
@@ -441,7 +453,96 @@ def _salvar_logo_brand(slug: str, file_storage) -> str:
             f"Logo muito grande ({tamanho // 1024 // 1024} MB). "
             f"Limite: {_LOGO_MAX_BYTES // 1024 // 1024} MB."
         )
-    return destino.name
+    return nome_arquivo
+
+
+def _apagar_logo_pendente(nome_arquivo: str) -> None:
+    """Remove um logo pendente do disco (solicitação rejeitada)."""
+    (settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME / nome_arquivo).unlink(missing_ok=True)
+
+
+def _promover_logo_pendente(nome_arquivo: str, slug: str) -> str:
+    """Renomeia um logo pendente pro nome final (assets/logo_<slug>.<ext>)."""
+    origem = settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME / nome_arquivo
+    ext = origem.suffix
+    novo_nome = f"logo_{slug}{ext}"
+    origem.rename(settings.ASSETS_DIR / novo_nome)
+    return novo_nome
+
+
+# --------------------------------------------------------------------------
+# Cadastro de cliente (brand + primeiro usuário) — usado só pela aprovação
+# de solicitação (POST /api/admin/signup-requests/<id>/approve)
+# --------------------------------------------------------------------------
+def _resolver_slug_brand(nome: str, slug_desejado: str | None) -> str:
+    """Resolve e valida um slug de brand novo. Levanta ValueError se inválido ou já em uso."""
+    slug = (slug_desejado or "").strip() or utils.slugify_brand(nome)
+    if not re.fullmatch(r"[a-z][a-z0-9_]{1,49}", slug):
+        raise ValueError(f"Slug inválido: {slug!r}. Use letras minúsculas, números e '_'.")
+    if slug in brands_module.list_available_brands():
+        raise ValueError(f"Já existe um brand com o slug {slug!r}.")
+    return slug
+
+
+def _criar_cliente_e_usuario(dados: dict) -> tuple[str, str, str]:
+    """
+    Cria um brand + o primeiro usuário desse brand, a partir de um dict
+    normalizado de campos (nome, email, slug, navy/gold/white/cream/navy_dark,
+    logo_filename já resolvido, use_image_logo, theme, google_fonts_url,
+    ui_heading_font, ui_body_font, image_prompt_suffix, ideogram_negative_prompt,
+    approved_by, system_prompt, system_prompt_carousel).
+
+    Returns:
+        (slug, email, senha_temporaria)
+
+    Raises:
+        ValueError: campo obrigatório ausente, slug inválido/em uso, ou email
+            já cadastrado (nesse caso o brand recém-criado é desfeito).
+    """
+    nome = (dados.get("nome") or "").strip()
+    email = (dados.get("email") or "").strip()
+    if not nome:
+        raise ValueError("Campo 'nome' é obrigatório.")
+    if not email:
+        raise ValueError("Campo 'email' é obrigatório.")
+
+    slug = _resolver_slug_brand(nome, dados.get("slug"))
+
+    colors = {
+        "navy": dados.get("navy") or "#272D4D",
+        "gold": dados.get("gold") or "#E3B644",
+        "white": dados.get("white") or "#FFFFFF",
+        "cream": dados.get("cream") or "#F5F0E8",
+        "navy_dark": dados.get("navy_dark") or "#1A2038",
+    }
+    logo_filename = dados.get("logo_filename")
+    use_image_logo = (dados.get("use_image_logo") in ("true", "1", "on", True)) and logo_filename is not None
+
+    brands_store.criar_brand(
+        slug, nome, colors,
+        logo_filename=logo_filename,
+        use_image_logo=use_image_logo,
+        theme=dados.get("theme") or "light",
+        google_fonts_url=dados.get("google_fonts_url") or "",
+        ui_heading_font=dados.get("ui_heading_font") or "",
+        ui_body_font=dados.get("ui_body_font") or "",
+        image_prompt_suffix=dados.get("image_prompt_suffix") or "",
+        ideogram_negative_prompt=dados.get("ideogram_negative_prompt") or "",
+        approved_by=dados.get("approved_by") or "",
+        system_prompt=dados.get("system_prompt") or "",
+        system_prompt_carousel=dados.get("system_prompt_carousel") or "",
+    )
+
+    senha = secrets.token_urlsafe(12)
+    try:
+        users_store.criar_usuario(email, generate_password_hash(senha), slug, role="cliente")
+    except sqlite3.IntegrityError:
+        # Email já existe — desfaz o brand recém-criado (evita brand órfão
+        # sem ninguém pra logar nele).
+        brands_store.delete_brand(slug)
+        raise ValueError(f"Email {email!r} já está cadastrado.")
+
+    return slug, email, senha
 
 
 # --------------------------------------------------------------------------
@@ -712,7 +813,10 @@ def build_app() -> Flask:
         return "ok", 200
 
     # /style.css é público pra login.html conseguir carregar o CSS sem sessão.
-    _ROTAS_PUBLICAS = {"/health", "/login", "/logout", "/style.css"}
+    # /signup + /api/signup-requests são públicas de propósito: qualquer
+    # pessoa não-autenticada pode solicitar cadastro (aprovação fica com
+    # o admin, ver POST /api/admin/signup-requests/<id>/approve).
+    _ROTAS_PUBLICAS = {"/health", "/login", "/logout", "/style.css", "/signup", "/api/signup-requests"}
 
     @app.before_request
     def _require_login():
@@ -811,16 +915,12 @@ def build_app() -> Flask:
         ]
         return jsonify({"brands": brands_info, "usuarios": usuarios})
 
-    @app.route("/api/admin/clients", methods=["POST"])
-    @login_required
-    def api_admin_criar_cliente():
+    @app.route("/api/signup-requests", methods=["POST"])
+    def api_signup_request():
         """
-        Cadastra um cliente novo: cria o brand (multipart, logo opcional) +
-        o primeiro usuário desse brand, numa única chamada.
+        Solicitação pública de cadastro (sem login) — só o essencial. Os
+        campos técnicos (prompts) ficam vazios até o admin revisar/aprovar.
         """
-        if current_user.role != "admin":
-            return jsonify({"erro": "Só admin pode cadastrar clientes."}), 403
-
         if request.content_type and request.content_type.startswith("multipart/form-data"):
             body = {k: v for k, v in request.form.items()}
             logo_file = request.files.get("logo")
@@ -834,14 +934,8 @@ def build_app() -> Flask:
         email = (body.get("email") or "").strip()
         if not nome:
             return jsonify({"erro": "Campo 'nome' é obrigatório."}), 400
-        if not email:
-            return jsonify({"erro": "Campo 'email' é obrigatório."}), 400
-
-        slug = (body.get("slug") or "").strip() or utils.slugify_brand(nome)
-        if not re.fullmatch(r"[a-z][a-z0-9_]{1,49}", slug):
-            return jsonify({"erro": f"Slug inválido: {slug!r}. Use letras minúsculas, números e '_'."}), 400
-        if slug in brands_module.list_available_brands():
-            return jsonify({"erro": f"Já existe um brand com o slug {slug!r}."}), 400
+        if not email or "@" not in email:
+            return jsonify({"erro": "Email inválido."}), 400
 
         colors = {
             "navy": body.get("navy") or "#272D4D",
@@ -851,40 +945,117 @@ def build_app() -> Flask:
             "navy_dark": body.get("navy_dark") or "#1A2038",
         }
 
-        logo_filename = None
+        logo_filename_pendente = None
         if logo_file is not None:
             try:
-                logo_filename = _salvar_logo_brand(slug, logo_file)
+                logo_filename_pendente = _salvar_logo_pendente(logo_file)
             except ValueError as e:
                 return jsonify({"erro": str(e)}), 400
 
-        use_image_logo = (body.get("use_image_logo") in ("true", "1", "on", True)) and logo_filename is not None
-
-        brands_store.criar_brand(
-            slug, nome, colors,
-            logo_filename=logo_filename,
-            use_image_logo=use_image_logo,
+        signup_requests_store.criar_solicitacao(
+            nome, email, colors,
+            slug_sugerido=(body.get("slug") or "").strip() or None,
+            logo_filename_pendente=logo_filename_pendente,
+            use_image_logo=(body.get("use_image_logo") in ("true", "1", "on", True)),
             theme=body.get("theme") or "light",
             google_fonts_url=body.get("google_fonts_url") or "",
             ui_heading_font=body.get("ui_heading_font") or "",
             ui_body_font=body.get("ui_body_font") or "",
-            image_prompt_suffix=body.get("image_prompt_suffix") or "",
-            ideogram_negative_prompt=body.get("ideogram_negative_prompt") or "",
-            approved_by=body.get("approved_by") or "",
-            system_prompt=body.get("system_prompt") or "",
-            system_prompt_carousel=body.get("system_prompt_carousel") or "",
+            sobre_negocio=body.get("sobre_negocio") or "",
         )
+        return jsonify({"status": "recebido"}), 201
 
-        senha = secrets.token_urlsafe(12)
+    @app.route("/api/admin/signup-requests", methods=["GET"])
+    @login_required
+    def api_admin_listar_solicitacoes():
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode ver solicitações."}), 403
+        status = request.args.get("status")
+        return jsonify(signup_requests_store.list_solicitacoes(status))
+
+    @app.route("/api/admin/signup-requests/<int:id_>/approve", methods=["POST"])
+    @login_required
+    def api_admin_aprovar_solicitacao(id_: int):
+        """
+        Aprova uma solicitação: cria o brand + o primeiro usuário. O corpo da
+        requisição pode trazer qualquer campo pra sobrescrever/completar o
+        que veio na solicitação (ex.: os prompts técnicos, que o form público
+        não pede).
+        """
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode aprovar solicitações."}), 403
+
+        solicitacao = signup_requests_store.get_by_id(id_)
+        if solicitacao is None:
+            return jsonify({"erro": f"Solicitação {id_} não encontrada."}), 404
+        if solicitacao["status"] != "pendente":
+            return jsonify({"erro": f"Solicitação já revisada (status={solicitacao['status']!r})."}), 400
+
+        cores_solicitadas = json.loads(solicitacao["colors_json"])
+        dados = {
+            "nome": solicitacao["nome"],
+            "email": solicitacao["email"],
+            "slug": solicitacao["slug_sugerido"],
+            "navy": cores_solicitadas.get("navy"),
+            "gold": cores_solicitadas.get("gold"),
+            "white": cores_solicitadas.get("white"),
+            "cream": cores_solicitadas.get("cream"),
+            "navy_dark": cores_solicitadas.get("navy_dark"),
+            "use_image_logo": solicitacao["use_image_logo"],
+            "theme": solicitacao["theme"],
+            "google_fonts_url": solicitacao["google_fonts_url"],
+            "ui_heading_font": solicitacao["ui_heading_font"],
+            "ui_body_font": solicitacao["ui_body_font"],
+            "image_prompt_suffix": solicitacao["image_prompt_suffix"],
+            "ideogram_negative_prompt": solicitacao["ideogram_negative_prompt"],
+            "approved_by": solicitacao["approved_by"],
+            "system_prompt": solicitacao["system_prompt"],
+            "system_prompt_carousel": solicitacao["system_prompt_carousel"],
+        }
+        body = request.get_json(force=True) or {}
+        for k, v in body.items():
+            if v not in (None, ""):
+                dados[k] = v
+
         try:
-            users_store.criar_usuario(email, generate_password_hash(senha), slug, role="cliente")
-        except sqlite3.IntegrityError:
-            # Email já existe — desfaz o brand recém-criado (evita brand
-            # órfão sem ninguém pra logar nele).
-            brands_store.delete_brand(slug)
-            return jsonify({"erro": f"Email {email!r} já está cadastrado."}), 400
+            slug = _resolver_slug_brand(dados.get("nome", ""), dados.get("slug"))
+        except ValueError as e:
+            return jsonify({"erro": str(e)}), 400
+        dados["slug"] = slug
 
+        pendente = solicitacao.get("logo_filename_pendente")
+        if pendente and (settings.ASSETS_DIR / _PENDING_LOGOS_DIR_NAME / pendente).exists():
+            dados["logo_filename"] = _promover_logo_pendente(pendente, slug)
+
+        try:
+            slug, email, senha = _criar_cliente_e_usuario(dados)
+        except ValueError as e:
+            return jsonify({"erro": str(e)}), 400
+
+        signup_requests_store.marcar_revisada(id_, "aprovado", current_user.email)
         return jsonify({"slug": slug, "email": email, "senha_temporaria": senha}), 201
+
+    @app.route("/api/admin/signup-requests/<int:id_>/reject", methods=["POST"])
+    @login_required
+    def api_admin_rejeitar_solicitacao(id_: int):
+        if current_user.role != "admin":
+            return jsonify({"erro": "Só admin pode rejeitar solicitações."}), 403
+
+        solicitacao = signup_requests_store.get_by_id(id_)
+        if solicitacao is None:
+            return jsonify({"erro": f"Solicitação {id_} não encontrada."}), 404
+        if solicitacao["status"] != "pendente":
+            return jsonify({"erro": f"Solicitação já revisada (status={solicitacao['status']!r})."}), 400
+
+        body = request.get_json(force=True) or {}
+        motivo = (body.get("motivo") or "").strip()
+
+        pendente = solicitacao.get("logo_filename_pendente")
+        if pendente:
+            _apagar_logo_pendente(pendente)
+
+        signup_requests_store.marcar_revisada(id_, "rejeitado", current_user.email, motivo_rejeicao=motivo)
+        return jsonify({"status": "rejeitado", "id": id_})
 
     @app.route("/api/admin/users", methods=["POST"])
     @login_required
