@@ -44,7 +44,7 @@ from waitress import serve as waitress_serve
 from werkzeug.security import check_password_hash
 
 from config import settings
-from config.brands import AVAILABLE_BRANDS, BriefingField
+from config.brands import BriefingField
 from config import brands as brands_module
 from modules import (
     briefing_parser,
@@ -727,7 +727,7 @@ def build_app() -> Flask:
             "email": current_user.email,
             "role": current_user.role,
             "brand_slug": _active_brand_slug(),
-            "available_brands": list(AVAILABLE_BRANDS) if current_user.role == "admin" else [],
+            "available_brands": list(brands_module.list_available_brands()) if current_user.role == "admin" else [],
         })
 
     @app.route("/api/admin/brand", methods=["POST"])
@@ -737,7 +737,7 @@ def build_app() -> Flask:
             return jsonify({"erro": "Só admin pode trocar de brand."}), 403
         body = request.get_json(force=True) or {}
         slug = body.get("slug")
-        if slug not in AVAILABLE_BRANDS:
+        if slug not in brands_module.list_available_brands():
             return jsonify({"erro": f"Brand desconhecido: {slug!r}."}), 400
         session["active_brand"] = slug
         return jsonify({"status": "ok", "brand_slug": slug})

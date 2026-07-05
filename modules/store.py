@@ -105,6 +105,28 @@ CREATE TABLE IF NOT EXISTS users (
     role        TEXT    NOT NULL DEFAULT 'cliente',
     created_at  TEXT    NOT NULL
 );
+
+-- Brands criados pela tela de admin (além dos hardcoded em config/brands/*.py).
+-- fonts/font_files/briefing_fields NÃO ficam aqui de propósito: hoje são
+-- idênticos entre os brands existentes (sem infra real de upload de fonte
+-- nem de formulário de briefing customizado) — ver config/brands/__init__.py.
+CREATE TABLE IF NOT EXISTS brands (
+    slug                     TEXT PRIMARY KEY,
+    nome                     TEXT NOT NULL,
+    colors_json              TEXT NOT NULL,
+    logo_filename            TEXT,
+    use_image_logo           INTEGER NOT NULL DEFAULT 1,
+    theme                    TEXT NOT NULL DEFAULT 'light',
+    google_fonts_url         TEXT NOT NULL DEFAULT '',
+    ui_heading_font          TEXT NOT NULL DEFAULT '',
+    ui_body_font             TEXT NOT NULL DEFAULT '',
+    image_prompt_suffix      TEXT NOT NULL DEFAULT '',
+    ideogram_negative_prompt TEXT NOT NULL DEFAULT '',
+    approved_by              TEXT NOT NULL DEFAULT '',
+    system_prompt            TEXT NOT NULL DEFAULT '',
+    system_prompt_carousel   TEXT NOT NULL DEFAULT '',
+    created_at               TEXT NOT NULL
+);
 """
 
 # Colunas editáveis de briefing_templates (id e created_at são geridos pelo DB;
@@ -643,6 +665,19 @@ def quota_counts(brand_slug: str | None = None) -> dict[str, int]:
         "agendadas_futuro": int(row_futuro["n"]),
         "pendentes_aprovacao": int(row_pendentes["n"]),
     }
+
+
+def tokens_used_por_brand() -> dict[str, int]:
+    """
+    Soma de tokens_used agrupada por brand_slug — usado na página de admin.
+
+    Brand sem nenhuma campanha não aparece no dict; o caller trata como 0.
+    """
+    with connect() as con:
+        rows = con.execute(
+            "SELECT brand_slug, SUM(tokens_used) AS total FROM campaigns GROUP BY brand_slug"
+        ).fetchall()
+    return {r["brand_slug"]: int(r["total"] or 0) for r in rows}
 
 
 def find_orphan_campaigns(threshold_seconds: int = 300) -> list[str]:

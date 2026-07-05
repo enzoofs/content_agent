@@ -13,6 +13,7 @@ Como adicionar um novo brand:
 from __future__ import annotations
 
 import importlib
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -113,21 +114,99 @@ class Brand:
     build_user_message_carousel: Callable[[dict, str], str] = field(default=lambda b, n="": "")
 
 
-# Brands existentes — tupla explícita (só 2 hoje, não vale a abstração de
-# escanear o filesystem). Usado pelo login multi-tenant pra validar contra
-# qual brand um admin pode alternar (POST /api/admin/brand).
+# Brands existentes como arquivo .py — tupla explícita (só 2 hoje, não vale
+# a abstração de escanear o filesystem). Brands criados pela tela de admin
+# vivem no banco (modules/brands_store.py) — ver list_available_brands().
 AVAILABLE_BRANDS = ("mendes_vaz", "gui_raw")
+
+# fonts/font_files compartilhados por TODO brand criado via admin — hoje nem
+# mendes_vaz nem gui_raw têm infra real de upload de fonte por cliente (os
+# dois usam literalmente os mesmos 3 arquivos), então não vale construir essa
+# abstração antes de precisar de verdade. Valores idênticos aos hardcoded em
+# config/brands/mendes_vaz.py.
+_BASE_DIR = Path(__file__).parent.parent.parent
+_FONTS_DIR = _BASE_DIR / "assets" / "fonts"
+_SHARED_FONTS = {"heading": "Playfair Display", "subhead": "Montserrat", "body": "Montserrat"}
+_SHARED_FONT_FILES = {
+    "montserrat_400": _FONTS_DIR / "montserrat-400.woff2",
+    "montserrat_600": _FONTS_DIR / "montserrat-600.woff2",
+    "playfair_700": _FONTS_DIR / "playfair-display-700.woff2",
+}
 
 
 def load(slug: str) -> Brand:
     """
-    Carrega o brand pelo slug. Lança ModuleNotFoundError se não existir.
+    Carrega o brand pelo slug.
+
+    Primeiro tenta um módulo .py em config/brands/<slug>.py (mendes_vaz,
+    gui_raw). Se não existir, cai pro banco (brands criados via tela de
+    admin). Lança ModuleNotFoundError se não existir em nenhum dos dois.
 
     Args:
-        slug: nome do módulo em config/brands/ (ex: "mendes_vaz", "gui_raw").
+        slug: "mendes_vaz", "gui_raw", ou slug de um brand criado via admin.
 
     Returns:
-        Instância de Brand definida no módulo (atributo BRAND).
+        Instância de Brand.
     """
-    modulo = importlib.import_module(f"config.brands.{slug}")
-    return modulo.BRAND
+    try:
+        modulo = importlib.import_module(f"config.brands.{slug}")
+        return modulo.BRAND
+    except ModuleNotFoundError:
+        return _load_from_db(slug)
+
+
+def _load_from_db(slug: str) -> Brand:
+    """
+    Constrói um Brand a partir de uma row da tabela `brands` (SQLite).
+
+    Import de modules.brands_store/config.settings é TARDIO (dentro da
+    função, não no topo do módulo) de propósito: config/settings.py importa
+    config.brands ANTES de terminar de definir STATE_DB_PATH. Se um slug
+    só-DB fosse resolvido durante o `brands.load(BRAND_NAME)` de bootstrap
+    (settings.py, no import), settings.STATE_DB_PATH ainda não existiria no
+    módulo parcialmente inicializado -> AttributeError. Isso só aconteceria
+    se a env var BRAND apontasse pra um slug só-DB (fluxo terminal/
+    --campaign) — o fluxo web real (server.py:_resolve_brand, resolvido por
+    request, bem depois do boot completo) nunca bate nesse caso. Limitação
+    aceita: brands criados via admin só funcionam pelo login web.
+    """
+    from modules import brands_store
+    from config import settings
+
+    row = brands_store.get_by_slug(slug)
+    if row is None:
+        raise ModuleNotFoundError(f"Brand {slug!r} não encontrado (nem .py, nem banco).")
+
+    logo_filename = row["logo_filename"]
+    use_image_logo = bool(row["use_image_logo"]) and logo_filename is not None
+    logo_path = (
+        settings.ASSETS_DIR / logo_filename if logo_filename
+        else settings.ASSETS_DIR / "logo_mendes_vaz.png"  # nunca renderizada (use_image_logo=False)
+    )
+
+    return Brand(
+        nome=row["nome"],
+        slug=row["slug"],
+        colors=json.loads(row["colors_json"]),
+        fonts=_SHARED_FONTS,
+        font_files=_SHARED_FONT_FILES,
+        logo_path=logo_path,
+        image_prompt_suffix=row["image_prompt_suffix"],
+        ideogram_negative_prompt=row["ideogram_negative_prompt"],
+        approved_by=row["approved_by"],
+        system_prompt=row["system_prompt"],
+        system_prompt_carousel=row["system_prompt_carousel"],
+        theme=row["theme"],
+        use_image_logo=use_image_logo,
+        google_fonts_url=row["google_fonts_url"],
+        ui_heading_font=row["ui_heading_font"],
+        ui_body_font=row["ui_body_font"],
+        # briefing_fields fica () de propósito: cai no fallback
+        # _DEFAULT_BRIEFING_FIELDS de server.py, igual o mendes_vaz hoje.
+    )
+
+
+def list_available_brands() -> tuple[str, ...]:
+    """AVAILABLE_BRANDS (arquivo .py) + slugs de brands criados via admin (banco)."""
+    from modules import brands_store
+    return AVAILABLE_BRANDS + tuple(b["slug"] for b in brands_store.list_brands())

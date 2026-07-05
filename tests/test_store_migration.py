@@ -78,3 +78,4 @@ def test_init_db_migra_banco_sem_brand_slug(tmp_path, monkeypatch):
     assert "brand_slug" in cols_campaigns
     assert "brand_slug" in cols_templates
     assert "users" in tabelas
+    assert "brands" in tabelas
