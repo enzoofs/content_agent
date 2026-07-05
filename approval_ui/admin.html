@@ -8,20 +8,43 @@
   <link rel="stylesheet" href="style.css">
   <style>
     /* Página deliberadamente sem tema de brand (é uma área multi-brand) —
-       mesmo espírito de login.html: só os tokens default de style.css. */
-    body { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-6) var(--space-16); }
+       mesmo espírito de login.html: cores fixas neutras, não os tokens de
+       brand de style.css (--navy/--gold etc. carregam identidade do M&V
+       por default). O header aqui NÃO tem seletor de brand de propósito —
+       o admin não "entra" na visão de um cliente a partir desta tela; pra
+       ver os dados de um brand específico, ele usa o seletor que já existe
+       na central normal (index.html).  */
+    :root {
+      --admin-bg: #14161c;
+      --admin-fg: #f2f2f2;
+      --admin-fg-dim: rgba(242, 242, 242, 0.65);
+    }
+    body { margin: 0; padding: 0 0 var(--space-16); }
+    .admin-content { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-6) 0; }
     .admin-header {
-      display: flex; align-items: baseline; justify-content: space-between;
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--admin-bg); color: var(--admin-fg);
+      padding: var(--space-4) var(--space-6);
       margin-bottom: var(--space-8);
     }
-    .admin-header h1 {
+    .admin-header .admin-title {
       font-family: "Playfair Display", serif;
-      font-size: var(--text-3xl);
-      color: var(--ink-1);
-      margin: 0;
+      font-size: var(--text-xl);
+      letter-spacing: 0.3px;
     }
-    .admin-header a { color: var(--ink-3); font-size: var(--text-sm); text-decoration: none; }
-    .admin-header a:hover { color: var(--ink-1); }
+    .admin-header nav { display: flex; align-items: center; gap: var(--space-5); }
+    .admin-header a {
+      color: var(--admin-fg-dim); font-size: var(--text-sm);
+      text-decoration: none;
+    }
+    .admin-header a:hover { color: var(--admin-fg); }
+    .admin-header .btn-sair {
+      background: transparent; border: 1px solid rgba(242, 242, 242, 0.3);
+      color: var(--admin-fg); font-size: var(--text-xs);
+      padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .admin-header .btn-sair:hover { background: rgba(242, 242, 242, 0.1); }
     .admin-section { margin-bottom: var(--space-12); }
     .admin-section h2 {
       font-size: var(--text-lg); color: var(--ink-1);
@@ -61,11 +84,15 @@
   </style>
 </head>
 <body>
-  <div class="admin-header">
-    <h1>Administração</h1>
-    <a href="/">&larr; Voltar pra central</a>
-  </div>
+  <header class="admin-header">
+    <span class="admin-title">Administração</span>
+    <nav>
+      <a href="/">&larr; Central de Conteúdo</a>
+      <button type="button" class="btn-sair" id="btn-sair-admin">Sair</button>
+    </nav>
+  </header>
 
+  <div class="admin-content">
   <section class="admin-section">
     <h2>Estatísticas por brand</h2>
     <div id="brand-stats" class="brand-stats-grid"><p class="loading">Carregando…</p></div>
@@ -166,6 +193,7 @@
       <div class="senha-gerada" id="senha-novo-usuario"></div>
     </form>
   </section>
+  </div>
 
   <script src="admin.js"></script>
 </body>

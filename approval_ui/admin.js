@@ -5,7 +5,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   await carregarStats();
   wireFormNovoCliente();
   wireFormNovoUsuario();
+  wireSair();
 });
+
+function wireSair() {
+  document.getElementById("btn-sair-admin").addEventListener("click", async () => {
+    await fetch("/logout", { method: "POST" });
+    location.href = "/login";
+  });
+}
 
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
