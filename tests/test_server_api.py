@@ -69,6 +69,20 @@ def test_criar_campanha(client):
     assert campaign_store.read_state(CID)["status"] == "gerando"
 
 
+def test_criar_campanha_multipart_sem_arquivo_upload_nao_quebra(client):
+    """
+    Regressão: form multipart com o campo "upload" presente mas vazio
+    (input file sem arquivo escolhido) não pode ser tratado como se um
+    arquivo real tivesse sido enviado — mesmo bug de FileStorage "falsy"
+    corrigido em api_signup_request (ver tests/test_signup_api.py).
+    """
+    import io
+    body = {k: str(v) for k, v in _briefing_body().items()}
+    body["upload"] = (io.BytesIO(b""), "")
+    resp = client.post("/api/campaigns", content_type="multipart/form-data", data=body)
+    assert resp.status_code == 201
+
+
 def test_criar_briefing_invalido_400(client):
     body = _briefing_body()
     body["tom"] = "informal"  # inválido

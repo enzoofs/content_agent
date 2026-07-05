@@ -816,7 +816,10 @@ def build_app() -> Flask:
     # /signup + /api/signup-requests são públicas de propósito: qualquer
     # pessoa não-autenticada pode solicitar cadastro (aprovação fica com
     # o admin, ver POST /api/admin/signup-requests/<id>/approve).
-    _ROTAS_PUBLICAS = {"/health", "/login", "/logout", "/style.css", "/signup", "/api/signup-requests"}
+    _ROTAS_PUBLICAS = {
+        "/health", "/login", "/logout", "/style.css",
+        "/signup", "/signup.js", "/api/signup-requests",
+    }
 
     @app.before_request
     def _require_login():
@@ -924,7 +927,10 @@ def build_app() -> Flask:
         if request.content_type and request.content_type.startswith("multipart/form-data"):
             body = {k: v for k, v in request.form.items()}
             logo_file = request.files.get("logo")
-            if logo_file and not logo_file.filename:
+            # "is not None" (não truthiness): FileStorage vazio é falsy no
+            # Werkzeug, então "if logo_file and ..." nunca entra aqui e o
+            # objeto (falsy mas != None) escapava pro check de baixo.
+            if logo_file is not None and not logo_file.filename:
                 logo_file = None
         else:
             body = request.get_json(force=True) or {}
@@ -1184,7 +1190,9 @@ def build_app() -> Flask:
         if request.content_type and request.content_type.startswith("multipart/form-data"):
             body = {k: v for k, v in request.form.items()}
             upload_file = request.files.get("upload")
-            if upload_file and not upload_file.filename:
+            # "is not None" (não truthiness) — mesmo motivo do logo_file em
+            # api_signup_request: FileStorage vazio é falsy no Werkzeug.
+            if upload_file is not None and not upload_file.filename:
                 upload_file = None
         else:
             body = request.get_json(force=True)

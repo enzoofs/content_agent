@@ -64,6 +64,24 @@ def test_signup_cria_solicitacao_pendente_com_campos_tecnicos_vazios(client):
     assert s["ideogram_negative_prompt"] == ""
 
 
+def test_signup_multipart_com_campo_logo_vazio_nao_quebra(client):
+    """
+    Regressão: quando o form real do navegador (enctype=multipart) é
+    submetido sem nenhum arquivo escolhido, o campo "logo" ainda vem no
+    multipart como um FileStorage vazio (filename=""), não ausente.
+    FileStorage vazio é "falsy" no Werkzeug, então um check por truthiness
+    (`if logo_file and ...`) nunca zera a variável e ela escapa como
+    "achou um arquivo" pro validador de extensão. Tem que checar
+    `is not None`, não truthiness.
+    """
+    data = {
+        "nome": "Sem Logo De Verdade", "email": "semlogodeverdade@teste.com",
+        "logo": (io.BytesIO(b""), ""),
+    }
+    res = client.post("/api/signup-requests", content_type="multipart/form-data", data=data)
+    assert res.status_code == 201
+
+
 def test_signup_com_logo(client, tmp_path, monkeypatch):
     from config import settings
     monkeypatch.setattr(settings, "ASSETS_DIR", tmp_path)
@@ -250,6 +268,14 @@ def test_signup_page_publica_sem_login(client):
     res = client.get("/signup")
     assert res.status_code == 200
     assert b"Solicitar acesso" in res.data
+
+
+def test_signup_js_publico_sem_login(client):
+    """Regressão: sem isso o gate de auth redirecionava /signup.js pro
+    /login, e o navegador tentava executar aquele HTML como JS."""
+    res = client.get("/signup.js")
+    assert res.status_code == 200
+    assert res.content_type.startswith(("text/javascript", "application/javascript"))
 
 
 # ---------- endpoint antigo removido ----------
