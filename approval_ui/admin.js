@@ -3,7 +3,7 @@
 
 window.addEventListener("DOMContentLoaded", async () => {
   await carregarStats();
-  wireFormNovoCliente();
+  await carregarSolicitacoes();
   wireFormNovoUsuario();
   wireSair();
 });
@@ -106,8 +106,8 @@ function popularSelectBrand(slugs) {
   select.innerHTML = slugs.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
 }
 
-function mostrarSenhaGerada(elId, email, senha) {
-  const el = document.getElementById(elId);
+function mostrarSenhaGerada(elOuId, email, senha) {
+  const el = typeof elOuId === "string" ? document.getElementById(elOuId) : elOuId;
   el.style.display = "block";
   el.innerHTML = `
     <p><strong>${escapeHtml(email)}</strong> criado. Senha temporária (mostrada uma única vez):</p>
@@ -116,26 +116,114 @@ function mostrarSenhaGerada(elId, email, senha) {
   `;
 }
 
-function wireFormNovoCliente() {
-  const form = document.getElementById("form-novo-cliente");
-  const erro = document.getElementById("erro-novo-cliente");
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    erro.style.display = "none";
-    document.getElementById("senha-novo-cliente").style.display = "none";
-    const fd = new FormData(form);
-    // Checkbox só manda o value quando marcado — normaliza pra "true"/"false"
-    if (!form.use_image_logo.checked) fd.set("use_image_logo", "false");
-    try {
-      const data = await fetchJSON("/api/admin/clients", { method: "POST", body: fd });
-      mostrarSenhaGerada("senha-novo-cliente", data.email, data.senha_temporaria);
-      form.reset();
-      await carregarStats();
-    } catch (err) {
-      erro.textContent = err.message;
-      erro.style.display = "block";
-    }
-  });
+// ---------- Solicitações de cadastro (fluxo público /signup + revisão) ----------
+async function carregarSolicitacoes() {
+  const el = document.getElementById("signup-requests-list");
+  let solicitacoes;
+  try {
+    solicitacoes = await fetchJSON("/api/admin/signup-requests");
+  } catch (e) {
+    el.innerHTML = `<p class="loading">Erro: ${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  if (!solicitacoes.length) {
+    el.innerHTML = `<p class="loading">Nenhuma solicitação ainda.</p>`;
+    return;
+  }
+  el.innerHTML = "";
+  solicitacoes.forEach(s => el.appendChild(renderSolicitacaoItem(s)));
+}
+
+function renderSolicitacaoItem(s) {
+  const details = document.createElement("details");
+  details.className = "signup-request-item";
+  details.dataset.status = s.status;
+
+  const summary = document.createElement("summary");
+  summary.innerHTML = `
+    <span><strong>${escapeHtml(s.nome)}</strong> — ${escapeHtml(s.email)}</span>
+    <span>${escapeHtml(s.status)} · ${escapeHtml(s.created_at)}</span>
+  `;
+  details.appendChild(summary);
+
+  const tpl = document.getElementById("tpl-review-form");
+  const form = tpl.content.firstElementChild.cloneNode(true);
+
+  // Pré-preenche com o que veio na solicitação — admin completa o resto.
+  const colors = JSON.parse(s.colors_json);
+  form.nome.value = s.nome;
+  form.slug.value = s.slug_sugerido || "";
+  form.email.value = s.email;
+  form.theme.value = s.theme;
+  form.use_image_logo.checked = !!s.use_image_logo;
+  form.navy.value = colors.navy || "#272D4D";
+  form.gold.value = colors.gold || "#E3B644";
+  form.white.value = colors.white || "#FFFFFF";
+  form.cream.value = colors.cream || "#F5F0E8";
+  form.navy_dark.value = colors.navy_dark || "#1A2038";
+  form.sobre_negocio.value = s.sobre_negocio || "";
+  form.google_fonts_url.value = s.google_fonts_url || "";
+  form.ui_heading_font.value = s.ui_heading_font || "";
+  form.ui_body_font.value = s.ui_body_font || "";
+  form.image_prompt_suffix.value = s.image_prompt_suffix || "";
+  form.ideogram_negative_prompt.value = s.ideogram_negative_prompt || "";
+  form.approved_by.value = s.approved_by || "";
+  form.system_prompt.value = s.system_prompt || "";
+  form.system_prompt_carousel.value = s.system_prompt_carousel || "";
+  if (s.motivo_rejeicao) form.motivo_rejeicao.value = s.motivo_rejeicao;
+
+  const erro = form.querySelector(".admin-erro");
+  const senhaBox = form.querySelector(".senha-gerada");
+
+  if (s.status !== "pendente") {
+    form.querySelectorAll("input, select, textarea, button").forEach(el => { el.disabled = true; });
+  } else {
+    form.querySelector(".review-aprovar").addEventListener("click", async () => {
+      erro.style.display = "none";
+      try {
+        const data = await fetchJSON(`/api/admin/signup-requests/${s.id}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(camposRevisaoParaJSON(form)),
+        });
+        mostrarSenhaGerada(senhaBox, data.email, data.senha_temporaria);
+        await carregarStats();
+      } catch (e) {
+        erro.textContent = e.message;
+        erro.style.display = "block";
+      }
+    });
+
+    form.querySelector(".review-rejeitar").addEventListener("click", async () => {
+      erro.style.display = "none";
+      try {
+        await fetchJSON(`/api/admin/signup-requests/${s.id}/reject`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ motivo: form.motivo_rejeicao.value }),
+        });
+        await carregarSolicitacoes();
+      } catch (e) {
+        erro.textContent = e.message;
+        erro.style.display = "block";
+      }
+    });
+  }
+
+  details.appendChild(form);
+  return details;
+}
+
+function camposRevisaoParaJSON(form) {
+  const campos = [
+    "nome", "slug", "email", "theme", "navy", "gold", "white", "cream", "navy_dark",
+    "google_fonts_url", "ui_heading_font", "ui_body_font", "image_prompt_suffix",
+    "ideogram_negative_prompt", "approved_by", "system_prompt", "system_prompt_carousel",
+  ];
+  const body = {};
+  campos.forEach(c => { body[c] = form[c].value; });
+  body.use_image_logo = form.use_image_logo.checked ? "true" : "false";
+  return body;
 }
 
 function wireFormNovoUsuario() {

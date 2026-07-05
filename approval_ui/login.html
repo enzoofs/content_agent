@@ -8,28 +8,42 @@
   <link rel="stylesheet" href="style.css">
   <style>
     /* Página deliberadamente sem tema de brand (ainda não sabemos quem é
-       o usuário) — usa os tokens default de style.css, sem overrides. */
+       o usuário) — cores fixas neutras (não os tokens --navy/--gold de
+       style.css, que carregam a paleta do M&V por default). */
+    :root { --login-bg-1: #0f1117; --login-bg-2: #262b3a; }
     body.login-page {
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      margin: 0;
+      background: radial-gradient(circle at 30% 20%, var(--login-bg-2), var(--login-bg-1) 70%);
     }
     .login-box {
       width: 100%;
-      max-width: 360px;
-      padding: var(--space-8);
+      max-width: 380px;
+      padding: var(--space-10) var(--space-8);
       background: var(--surface-1);
-      border: 1px solid var(--line-soft);
       border-radius: var(--radius-md);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+    .login-box .login-mark {
+      width: 40px; height: 40px; margin: 0 auto var(--space-5);
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--login-bg-2), var(--login-bg-1));
     }
     .login-box h1 {
       font-family: "Playfair Display", serif;
       font-size: var(--text-2xl);
       color: var(--ink-1);
-      margin: 0 0 var(--space-6);
+      margin: 0 0 var(--space-1);
       text-align: center;
+    }
+    .login-box .login-sub {
+      text-align: center;
+      color: var(--ink-3);
+      font-size: var(--text-sm);
+      margin: 0 0 var(--space-8);
     }
     .login-box label {
       display: block;
@@ -52,11 +66,21 @@
       margin: 0 0 var(--space-4);
       display: none;
     }
+    .login-footer {
+      text-align: center;
+      margin-top: var(--space-6);
+      font-size: var(--text-sm);
+      color: var(--ink-3);
+    }
+    .login-footer a { color: var(--ink-1); font-weight: 600; text-decoration: none; }
+    .login-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body class="login-page">
   <div class="login-box">
+    <div class="login-mark"></div>
     <h1>Central de Conteúdo</h1>
+    <p class="login-sub">Entre com seu email e senha</p>
     <p class="login-erro" id="login-erro">Email ou senha inválidos.</p>
     <form id="login-form">
       <label>Email
@@ -67,6 +91,7 @@
       </label>
       <button type="submit" class="btn btn-approve">Entrar</button>
     </form>
+    <p class="login-footer">Ainda não tem acesso? <a href="/signup">Solicitar acesso</a></p>
   </div>
   <script>
     document.getElementById("login-form").addEventListener("submit", async (e) => {

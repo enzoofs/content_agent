@@ -81,6 +81,21 @@
     }
     .senha-gerada code { font-size: var(--text-md); font-weight: 600; }
     .admin-erro { color: var(--red); font-size: var(--text-sm); margin-top: var(--space-2); display: none; }
+    .signup-request-item {
+      border: 1px solid var(--line-soft); border-radius: var(--radius-md);
+      margin-bottom: var(--space-4); overflow: hidden;
+    }
+    .signup-request-item summary {
+      cursor: pointer; padding: var(--space-4);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: var(--text-sm); list-style: none;
+    }
+    .signup-request-item summary::-webkit-details-marker { display: none; }
+    .signup-request-item summary strong { color: var(--ink-1); }
+    .signup-request-item summary span { color: var(--ink-3); }
+    .signup-request-item .review-form { padding: 0 var(--space-4) var(--space-4); max-width: none; }
+    .signup-request-item[data-status="aprovado"] summary { background: rgba(60, 160, 70, 0.08); }
+    .signup-request-item[data-status="rejeitado"] summary { background: rgba(176, 65, 62, 0.08); }
   </style>
 </head>
 <body>
@@ -104,17 +119,24 @@
   </section>
 
   <section class="admin-section">
-    <h2>Novo cliente</h2>
+    <h2>Solicitações pendentes</h2>
     <p style="color: var(--ink-3); font-size: var(--text-sm); margin-top: -12px;">
-      Cria um brand novo (cores, prompts, logo opcional) + o primeiro usuário desse cliente.
+      Cadastro de cliente novo agora passa por aqui: alguém solicita em
+      <code>/signup</code>, você revisa/completa os prompts técnicos e aprova
+      (ou rejeita).
     </p>
-    <form id="form-novo-cliente" class="form" enctype="multipart/form-data">
+    <div id="signup-requests-list"><p class="loading">Carregando…</p></div>
+  </section>
+
+  <!-- Template do form de revisão — clonado por solicitação em admin.js -->
+  <template id="tpl-review-form">
+    <form class="form review-form" enctype="multipart/form-data">
       <div class="form-grid">
         <label>Nome do cliente
-          <input type="text" name="nome" required placeholder="ex.: Acme Advocacia">
+          <input type="text" name="nome" required>
         </label>
-        <label>Slug (opcional — gerado do nome se vazio)
-          <input type="text" name="slug" placeholder="ex.: acme_advocacia">
+        <label>Slug (editável antes de aprovar)
+          <input type="text" name="slug">
         </label>
         <label>Email do primeiro usuário
           <input type="email" name="email" required>
@@ -125,25 +147,25 @@
             <option value="dark">Escuro (dark)</option>
           </select>
         </label>
-        <label>Logo (opcional, PNG/JPG/WEBP até 5MB)
-          <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp">
-        </label>
         <label>
-          <input type="checkbox" name="use_image_logo" value="true" checked style="width:auto; display:inline-block;">
-          Mostrar logo enviado (sem logo, vira só o nome)
+          <input type="checkbox" name="use_image_logo" value="true" style="width:auto; display:inline-block;">
+          Mostrar logo (se enviado na solicitação)
         </label>
       </div>
 
       <div class="form-grid form-grid-full">
-        <div class="color-field"><label>Navy <input type="color" name="navy" value="#272D4D"></label></div>
-        <div class="color-field"><label>Gold <input type="color" name="gold" value="#E3B644"></label></div>
-        <div class="color-field"><label>White <input type="color" name="white" value="#FFFFFF"></label></div>
-        <div class="color-field"><label>Cream <input type="color" name="cream" value="#F5F0E8"></label></div>
-        <div class="color-field"><label>Navy escuro <input type="color" name="navy_dark" value="#1A2038"></label></div>
+        <div class="color-field"><label>Navy <input type="color" name="navy"></label></div>
+        <div class="color-field"><label>Gold <input type="color" name="gold"></label></div>
+        <div class="color-field"><label>White <input type="color" name="white"></label></div>
+        <div class="color-field"><label>Cream <input type="color" name="cream"></label></div>
+        <div class="color-field"><label>Navy escuro <input type="color" name="navy_dark"></label></div>
       </div>
 
+      <label>Conte sobre o negócio (enviado pelo solicitante — só leitura)
+        <textarea name="sobre_negocio" rows="2" readonly></textarea>
+      </label>
       <label>Google Fonts URL (opcional)
-        <input type="text" name="google_fonts_url" placeholder="https://fonts.googleapis.com/css2?family=...">
+        <input type="text" name="google_fonts_url">
       </label>
       <label>Fonte de título (CSS font-family, opcional)
         <input type="text" name="ui_heading_font" placeholder="'Unbounded', sans-serif">
@@ -166,12 +188,18 @@
       <label>System prompt (carrossel)
         <textarea name="system_prompt_carousel" rows="6"></textarea>
       </label>
+      <label>Motivo da rejeição (opcional, só se for rejeitar)
+        <input type="text" name="motivo_rejeicao">
+      </label>
 
-      <button type="submit" class="btn btn-approve">Cadastrar cliente</button>
-      <p class="admin-erro" id="erro-novo-cliente"></p>
-      <div class="senha-gerada" id="senha-novo-cliente"></div>
+      <div style="display: flex; gap: var(--space-3); margin-top: var(--space-2);">
+        <button type="button" class="btn btn-approve review-aprovar">Aprovar e criar cliente</button>
+        <button type="button" class="btn btn-adjust review-rejeitar">Rejeitar</button>
+      </div>
+      <p class="admin-erro"></p>
+      <div class="senha-gerada"></div>
     </form>
-  </section>
+  </template>
 
   <section class="admin-section">
     <h2>Novo usuário (brand existente)</h2>

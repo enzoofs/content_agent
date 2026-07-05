@@ -245,6 +245,13 @@ def test_rejeitar_403_pra_cliente(client):
     assert res.status_code == 403
 
 
+# ---------- página /signup ----------
+def test_signup_page_publica_sem_login(client):
+    res = client.get("/signup")
+    assert res.status_code == 200
+    assert b"Solicitar acesso" in res.data
+
+
 # ---------- endpoint antigo removido ----------
 def test_endpoint_antigo_criar_cliente_nao_existe_mais(client):
     _login_admin(client)

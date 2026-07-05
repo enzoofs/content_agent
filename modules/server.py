@@ -1135,6 +1135,14 @@ def build_app() -> Flask:
         html = html.replace('src="admin.js"', f'src="admin.js?v={js_mtime}"')
         return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+    @app.route("/signup")
+    def signup_page():
+        """Solicitação pública de cadastro (sem login) — igual /login, sem tema de brand."""
+        html = (settings.APPROVAL_UI_DIR / "signup.html").read_text(encoding="utf-8")
+        js_mtime = int((settings.APPROVAL_UI_DIR / "signup.js").stat().st_mtime)
+        html = html.replace('src="signup.js"', f'src="signup.js?v={js_mtime}"')
+        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
     @app.route("/logo.png")
     def logo():
         # Legacy: mantida pra compat caso algum link antigo aponte pra /logo.png
