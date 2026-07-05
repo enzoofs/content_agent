@@ -116,13 +116,15 @@ def _append_audit(entry: dict) -> None:
         f.write(linha + "\n")
 
 
-def export_approved(campaign_id: str, option_id: int) -> dict:
+def export_approved(campaign_id: str, option_id: int, brand=None) -> dict:
     """
     Exporta o post aprovado e seus metadados.
 
     Args:
         campaign_id: id da campanha.
         option_id: variação aprovada (1, 2 ou 3).
+        brand: brand da campanha (nome de quem aprova nos metadados). None
+            usa settings.brand.
 
     Returns:
         dict com:
@@ -135,6 +137,7 @@ def export_approved(campaign_id: str, option_id: int) -> dict:
         FileNotFoundError: se faltar o briefing, o copy ou algum PNG composto.
         ValueError: se a opção aprovada não existir no copy.
     """
+    brand = brand or settings.brand
     camp_dir = settings.CAMPAIGNS_DIR / campaign_id
 
     briefing = campaign_store.read_briefing(campaign_id)
@@ -155,12 +158,12 @@ def export_approved(campaign_id: str, option_id: int) -> dict:
     _campaign_export_dir(campaign_id)
 
     if briefing["formato"] == "carousel":
-        return _export_carousel(campaign_id, option_id, briefing, copy, camp_dir)
-    return _export_simples(campaign_id, option_id, briefing, copy, camp_dir)
+        return _export_carousel(campaign_id, option_id, briefing, copy, camp_dir, brand)
+    return _export_simples(campaign_id, option_id, briefing, copy, camp_dir, brand)
 
 
 def _export_simples(
-    campaign_id: str, option_id: int, briefing: dict, copy: dict, camp_dir: Path,
+    campaign_id: str, option_id: int, briefing: dict, copy: dict, camp_dir: Path, brand,
 ) -> dict:
     """square/portrait: 1 PNG + metadata + post.txt."""
     composed_png = camp_dir / "composed" / f"option_{option_id}.png"
@@ -186,7 +189,7 @@ def _export_simples(
         "headline": copy["headline"],
         "caption": copy["caption"],
         "hashtags": copy["hashtags"],
-        "approved_by": settings.APPROVED_BY,
+        "approved_by": brand.approved_by,
         "ready_for_posting": True,
     }
     meta_destino = out_dir / f"option{option_id}_metadata.json"
@@ -201,7 +204,7 @@ def _export_simples(
         "copy_version": copy_version,
         "formato": briefing["formato"],
         "approved_at": approved_at,
-        "approved_by": settings.APPROVED_BY,
+        "approved_by": brand.approved_by,
         "headline": copy["headline"],
         "export_png": f"{campaign_id}/{png_destino.name}",
     })
@@ -220,7 +223,7 @@ def _export_simples(
 
 
 def _export_carousel(
-    campaign_id: str, option_id: int, briefing: dict, copy: dict, camp_dir: Path,
+    campaign_id: str, option_id: int, briefing: dict, copy: dict, camp_dir: Path, brand,
 ) -> dict:
     """carrossel: N PNGs + metadata com a lista ordenada de slides + post.txt."""
     slides_meta = []
@@ -262,7 +265,7 @@ def _export_carousel(
         "cta": copy["cta"],
         "hashtags": copy["hashtags"],
         "slides": slides_meta,
-        "approved_by": settings.APPROVED_BY,
+        "approved_by": brand.approved_by,
         "ready_for_posting": True,
     }
     meta_destino = out_dir / f"option{option_id}_metadata.json"
@@ -278,7 +281,7 @@ def _export_carousel(
         "formato": "carousel",
         "num_slides": len(slides_meta),
         "approved_at": approved_at,
-        "approved_by": settings.APPROVED_BY,
+        "approved_by": brand.approved_by,
         "export_metadata": f"{campaign_id}/{meta_destino.name}",
     })
 

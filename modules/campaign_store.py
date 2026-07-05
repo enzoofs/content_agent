@@ -223,6 +223,7 @@ def read_briefing(campaign_id: str) -> dict | None:
         "created_at": c["created_at"],
         "hide_overlay": int(c["hide_overlay"] or 0) if "hide_overlay" in c.keys() else 0,
         "upload_filename": (c["upload_filename"] or "") if "upload_filename" in c.keys() else "",
+        "brand_slug": c["brand_slug"] if "brand_slug" in c.keys() else "mendes_vaz",
     }
 
 

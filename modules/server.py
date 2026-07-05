@@ -880,7 +880,7 @@ def build_app() -> Flask:
             except ValueError as e:
                 return jsonify({"erro": str(e)}), 400
 
-        export = exporter.export_approved(cid, option_id)
+        export = exporter.export_approved(cid, option_id, brand=g.brand)
         campaign_store.marcar_aprovada(cid, option_id, data_agendada)
         utils.log(cid, f"server: opção {option_id} aprovada (data={data_agendada}).")
         return jsonify({
@@ -1056,7 +1056,7 @@ def build_app() -> Flask:
         # Persiste e recompoõe
         versao = campaign_store.get_copy_version(cid)
         campaign_store.save_copy_version(cid, versao, opcoes)
-        composer.recompose_option(briefing, opcoes[idx])
+        composer.recompose_option(briefing, opcoes[idx], brand=g.brand)
 
         utils.log(cid, f"server: opção {option_id} editada manualmente e recomposta.")
         return jsonify(_campaign_payload(cid))

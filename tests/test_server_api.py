@@ -102,7 +102,7 @@ def test_approve_exporta_e_marca(client, monkeypatch):
     campaign_store.marcar_aguardando(CID)
     monkeypatch.setattr(
         server.exporter, "export_approved",
-        lambda cid, oid: {
+        lambda cid, oid, brand=None: {
             "png": Path("fake.png"),
             "metadata": Path("fake.json"),
             "post_txt": Path("fake.txt"),
@@ -124,7 +124,7 @@ def test_approve_data_passada_400(client, monkeypatch):
     campaign_store.marcar_aguardando(CID)
     monkeypatch.setattr(
         server.exporter, "export_approved",
-        lambda cid, oid: {
+        lambda cid, oid, brand=None: {
             "png": Path("fake.png"), "metadata": Path("fake.json"),
             "post_txt": Path("fake.txt"), "all_pngs": [Path("fake.png")],
         },
@@ -206,7 +206,7 @@ def test_edit_copy_simples_atualiza_e_recompoe(client, monkeypatch):
     recomposed: list = []
     monkeypatch.setattr(
         server.composer, "recompose_option",
-        lambda briefing, opcao: recomposed.append(opcao) or [Path("fake.png")],
+        lambda briefing, opcao, brand=None: recomposed.append(opcao) or [Path("fake.png")],
     )
 
     resp = client.post(
@@ -245,7 +245,7 @@ def test_edit_copy_carrossel_edita_metadado_e_slides(client, monkeypatch):
     campaign_store.marcar_aguardando(CID)
 
     monkeypatch.setattr(server.composer, "recompose_option",
-                        lambda b, o: [Path("fake.png")])
+                        lambda b, o, brand=None: [Path("fake.png")])
 
     resp = client.post(
         f"/api/campaigns/{CID}/edit-copy",

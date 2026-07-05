@@ -41,11 +41,11 @@ def test_gerar_passa_pelas_etapas_e_termina_aguardando(monkeypatch):
         campaign_store, "set_etapa",
         lambda cid, etapa: etapas_vistas.append(etapa),
     )
-    monkeypatch.setattr(pipeline.copy_generator, "generate", lambda b, nota="", versao=1: [{"option_id": 1}])
-    monkeypatch.setattr(pipeline.image_generator, "generate", lambda ops, fmt, cid: ["img"])
+    monkeypatch.setattr(pipeline.copy_generator, "generate", lambda b, nota="", versao=1, brand=None: [{"option_id": 1}])
+    monkeypatch.setattr(pipeline.image_generator, "generate", lambda ops, fmt, cid, brand=None: ["img"])
     monkeypatch.setattr(
         pipeline.composer, "compose_all",
-        lambda ops, imgs, b: [settings.CAMPAIGNS_DIR / CID / "composed" / "option_1.png"],
+        lambda ops, imgs, b, brand=None: [settings.CAMPAIGNS_DIR / CID / "composed" / "option_1.png"],
     )
 
     briefing = _briefing()
@@ -58,7 +58,7 @@ def test_gerar_passa_pelas_etapas_e_termina_aguardando(monkeypatch):
 
 
 def test_gerar_falha_marca_erro_e_relanca(monkeypatch):
-    def boom(b, nota="", versao=1):
+    def boom(b, nota="", versao=1, brand=None):
         raise RuntimeError("falha na copy")
     monkeypatch.setattr(pipeline.copy_generator, "generate", boom)
 
@@ -79,13 +79,13 @@ def test_regerar_bumpa_versao_e_preserva_copy_anterior(monkeypatch):
     """regerar() incrementa copy_version e a versão antiga continua no disco."""
     versoes_recebidas: list[int] = []
 
-    def fake_generate(briefing, nota="", versao=1):
+    def fake_generate(briefing, nota="", versao=1, brand=None):
         versoes_recebidas.append(versao)
         return [{"option_id": 1, "nota": nota, "versao": versao}]
 
     monkeypatch.setattr(pipeline.copy_generator, "generate", fake_generate)
-    monkeypatch.setattr(pipeline.image_generator, "generate", lambda ops, fmt, cid: ["img"])
-    monkeypatch.setattr(pipeline.composer, "compose_all", lambda ops, imgs, b: [])
+    monkeypatch.setattr(pipeline.image_generator, "generate", lambda ops, fmt, cid, brand=None: ["img"])
+    monkeypatch.setattr(pipeline.composer, "compose_all", lambda ops, imgs, b, brand=None: [])
 
     briefing = _briefing()
     campaign_store.criar(briefing)

@@ -226,7 +226,7 @@ def _parse_and_validate_carousel(raw_text: str, num_slides: int) -> list[dict]:
     return validadas
 
 
-def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[dict]:
+def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1, brand=None) -> list[dict]:
     """
     Gera variações de copy a partir do briefing validado.
 
@@ -235,6 +235,9 @@ def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[dic
         nota_ajuste: pedido de ajuste do Henrique (regeneração). Vazio na 1ª geração.
         versao: número da versão (1 na 1ª geração, 2+ ao regerar). Determina o
             arquivo de saída: campaigns/{cid}/copy_v{versao}.json.
+        brand: brand da campanha (system prompt varia por cliente). None usa
+            settings.brand (fallback seguro pro fluxo terminal/testes, que
+            ainda resolvem o brand pela env var BRAND do processo).
 
     Returns:
         Lista de dicts:
@@ -245,6 +248,7 @@ def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[dic
         RuntimeError: se a API falhar ou o JSON for inválido após as retentativas.
     """
     campaign_id = briefing["campaign_id"]
+    brand = brand or settings.brand
 
     if not settings.OPENAI_API_KEY:
         raise RuntimeError(
@@ -253,8 +257,8 @@ def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[dic
 
     is_carousel = briefing["formato"] == "carousel"
     system_prompt = (
-        settings.brand.system_prompt_carousel if is_carousel
-        else settings.brand.system_prompt
+        brand.system_prompt_carousel if is_carousel
+        else brand.system_prompt
     )
     user_message = (
         _build_user_message_carousel(briefing, nota_ajuste)
