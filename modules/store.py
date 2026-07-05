@@ -127,6 +127,34 @@ CREATE TABLE IF NOT EXISTS brands (
     system_prompt_carousel   TEXT NOT NULL DEFAULT '',
     created_at               TEXT NOT NULL
 );
+
+-- Solicitações públicas de cadastro (tela /signup, sem autenticação). Campos
+-- técnicos (prompts) ficam vazios até o admin completar na revisão — ver
+-- comentário em approval_ui/signup.html sobre o que o form público pede.
+CREATE TABLE IF NOT EXISTS signup_requests (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome                     TEXT NOT NULL,
+    email                    TEXT NOT NULL,
+    slug_sugerido            TEXT,
+    colors_json              TEXT NOT NULL,
+    logo_filename_pendente   TEXT,
+    use_image_logo           INTEGER NOT NULL DEFAULT 1,
+    theme                    TEXT NOT NULL DEFAULT 'light',
+    google_fonts_url         TEXT NOT NULL DEFAULT '',
+    ui_heading_font          TEXT NOT NULL DEFAULT '',
+    ui_body_font             TEXT NOT NULL DEFAULT '',
+    sobre_negocio            TEXT NOT NULL DEFAULT '',
+    image_prompt_suffix      TEXT NOT NULL DEFAULT '',
+    ideogram_negative_prompt TEXT NOT NULL DEFAULT '',
+    approved_by              TEXT NOT NULL DEFAULT '',
+    system_prompt            TEXT NOT NULL DEFAULT '',
+    system_prompt_carousel   TEXT NOT NULL DEFAULT '',
+    status                   TEXT NOT NULL DEFAULT 'pendente',
+    motivo_rejeicao          TEXT NOT NULL DEFAULT '',
+    created_at               TEXT NOT NULL,
+    reviewed_at              TEXT,
+    reviewed_by              TEXT
+);
 """
 
 # Colunas editáveis de briefing_templates (id e created_at são geridos pelo DB;
