@@ -74,3 +74,47 @@ def test_cap_perfil_cliente_no_limite_passa():
     b["perfil_cliente_ideal"] = "x" * bp.MAX_CHARS["perfil_cliente_ideal"]
     out = bp.parse(b)
     assert len(out["perfil_cliente_ideal"]) == bp.MAX_CHARS["perfil_cliente_ideal"]
+
+
+# --------------------------------------------------------------------------
+# Fonte (B.4): font_variant / font_size
+# --------------------------------------------------------------------------
+def test_font_size_default_eh_m_quando_ausente():
+    out = bp.parse(_briefing_minimo())
+    assert out["font_size"] == "M"
+
+
+def test_font_size_aceita_p_m_g():
+    for tamanho in ("P", "M", "G"):
+        b = _briefing_minimo()
+        b["font_size"] = tamanho
+        out = bp.parse(b)
+        assert out["font_size"] == tamanho
+
+
+def test_font_size_normaliza_minusculo():
+    b = _briefing_minimo()
+    b["font_size"] = "g"
+    out = bp.parse(b)
+    assert out["font_size"] == "G"
+
+
+def test_font_size_rejeita_valor_invalido():
+    b = _briefing_minimo()
+    b["font_size"] = "XL"
+    with pytest.raises(ValueError, match="font_size"):
+        bp.parse(b)
+
+
+def test_font_variant_aceita_string_livre_sem_validar_enum():
+    """Parser é brand-agnóstico — não conhece as FontOption do brand ativo,
+    então aceita qualquer id; a resolução segura acontece no composer."""
+    b = _briefing_minimo()
+    b["font_variant"] = "qualquer_coisa"
+    out = bp.parse(b)
+    assert out["font_variant"] == "qualquer_coisa"
+
+
+def test_font_variant_default_vazio_quando_ausente():
+    out = bp.parse(_briefing_minimo())
+    assert out["font_variant"] == ""

@@ -300,6 +300,14 @@ function renderNovo() {
     syncUpload();
   }
 
+  // Preview ao vivo de fonte (B.4): atualiza a cada troca do select, e já
+  // renderiza a variante default no boot do form.
+  const fontSelect = document.querySelector('#form-novo [name="font_variant"]');
+  if (fontSelect) {
+    fontSelect.addEventListener("change", (e) => atualizarPreviewFonte(e.target.value));
+    atualizarPreviewFonte(fontSelect.value);
+  }
+
   document.getElementById("form-novo").addEventListener("submit", onSubmitNovo);
 }
 
@@ -355,7 +363,36 @@ function renderField(f) {
   }
 
   const help = f.help ? `<small class="form-help">${escapeHtml(f.help)}</small>` : "";
-  return `<label id="${wrapId}"${wrapCls}>${escapeHtml(f.label)}${req}${input}${help}</label>`;
+  // font_variant ganha um preview ao vivo logo abaixo do select (B.4) —
+  // atualizado 100% client-side via atualizarPreviewFonte, sem round-trip.
+  const preview = f.name === "font_variant"
+    ? `<div id="font-preview" class="font-preview">Título de exemplo</div>`
+    : "";
+  return `<label id="${wrapId}"${wrapCls}>${escapeHtml(f.label)}${req}${input}${help}</label>${preview}`;
+}
+
+// Injeta/atualiza um <style> com @font-face apontando pros arquivos da
+// variante escolhida, e aplica a font-family no bloco de preview. Roda
+// inteiramente no navegador — sem chamar o servidor a cada troca.
+function atualizarPreviewFonte(fontOptionId) {
+  const preview = document.getElementById("font-preview");
+  if (!preview) return;
+  const opt = (BRAND && BRAND.font_options || []).find((o) => o.id === fontOptionId)
+    || (BRAND && BRAND.font_options && BRAND.font_options[0]);
+  if (!opt) return;
+
+  let styleTag = document.getElementById("font-preview-face");
+  if (!styleTag) {
+    styleTag = document.createElement("style");
+    styleTag.id = "font-preview-face";
+    document.head.appendChild(styleTag);
+  }
+  styleTag.textContent = `
+    @font-face { font-family: 'preview-heading-${opt.id}'; src: url('${opt.heading_url}') format('woff2'); }
+    @font-face { font-family: 'preview-body-${opt.id}'; src: url('${opt.body_400_url}') format('woff2'); }
+  `;
+  preview.style.fontFamily = `'preview-heading-${opt.id}', serif`;
+  preview.dataset.bodyFamily = `'preview-body-${opt.id}', sans-serif`;
 }
 
 function escapeAttr(s) {

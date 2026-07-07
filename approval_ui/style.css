@@ -486,6 +486,18 @@ body {
 .form input::placeholder, .form textarea::placeholder { color: var(--ink-4); }
 .form textarea { resize: vertical; line-height: 1.5; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.font-preview {
+  padding: var(--space-4);
+  border: 1px solid var(--line-medium);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink-1);
+  font-size: 28px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-top: calc(var(--space-2) * -1);
+}
 .form-erro {
   background: rgba(176,65,62,0.1);
   color: var(--red);

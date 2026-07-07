@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
     atualizado_em         TEXT    NOT NULL,
     tokens_used           INTEGER NOT NULL DEFAULT 0,
     hide_overlay          INTEGER NOT NULL DEFAULT 0,
-    upload_filename       TEXT
+    upload_filename       TEXT,
+    font_variant          TEXT,
+    font_size             TEXT    NOT NULL DEFAULT 'M'
 );
 
 CREATE TABLE IF NOT EXISTS copy_versions (
@@ -102,7 +104,7 @@ CAMPAIGN_COLUMNS = (
     "tema_especifico", "formato", "num_slides", "referencias", "created_at",
     "status", "etapa", "copy_version", "option_aprovada", "data_agendada",
     "erro", "atualizado_em", "tokens_used",
-    "hide_overlay", "upload_filename",
+    "hide_overlay", "upload_filename", "font_variant", "font_size",
 )
 
 
@@ -148,6 +150,14 @@ def init_db() -> None:
         if "upload_filename" not in cols:
             con.execute(
                 "ALTER TABLE campaigns ADD COLUMN upload_filename TEXT"
+            )
+        if "font_variant" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN font_variant TEXT"
+            )
+        if "font_size" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN font_size TEXT NOT NULL DEFAULT 'M'"
             )
 
 
@@ -200,6 +210,8 @@ def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy"
         "tokens_used": 0,
         "hide_overlay": int(briefing.get("hide_overlay") or 0),
         "upload_filename": briefing.get("upload_filename") or None,
+        "font_variant": briefing.get("font_variant") or None,
+        "font_size": briefing.get("font_size") or "M",
     }
     cols = ", ".join(CAMPAIGN_COLUMNS)
     placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -399,6 +411,8 @@ def migrate_from_files() -> dict:
             "tokens_used": int(state.get("tokens_used", 0) or 0),
             "hide_overlay": int(state.get("hide_overlay", 0) or 0),
             "upload_filename": state.get("upload_filename") or None,
+            "font_variant": state.get("font_variant") or None,
+            "font_size": state.get("font_size") or "M",
         }
         cols = ", ".join(CAMPAIGN_COLUMNS)
         placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)

@@ -7,15 +7,18 @@ minimalista (preto/branco) e a cor de destaque vai variar por vibe do evento
 (campo `vibe_musical` do briefing, implementado em B.3).
 
 NOTAS DE PLACEHOLDER (B.1):
-- Fontes Anton + JetBrains Mono ainda não foram baixadas. Usando
-  Playfair/Montserrat do M&V como placeholder. Trocar em B.2.
 - Logo é typographic (renderizado por CSS no template em B.3). Por ora
   reutiliza o arquivo do M&V só pra não quebrar o composer.
+
+Fontes Anton + JetBrains Mono foram baixadas em B.4 — ver font_options
+abaixo. `fonts`/`font_files` (legado, pré-seleção de variante) continuam
+apontando pro placeholder Playfair/Montserrat só pra não quebrar
+`composer.py` em brands que não migraram pra `font_options`.
 """
 
 from pathlib import Path
 
-from config.brands import Brand, BriefingField
+from config.brands import Brand, BriefingField, FontOption
 
 _BASE_DIR = Path(__file__).parent.parent.parent
 _ASSETS = _BASE_DIR / "assets"
@@ -96,6 +99,22 @@ _GUI_BRIEFING_FIELDS = (
         rows=2,
         placeholder="lineup, parceiros, mood, restrições…",
     ),
+    BriefingField(
+        name="font_variant",
+        label="Fonte",
+        kind="enum",
+        enum_values=("impacto", "mono"),
+        enum_labels=("Impacto (Anton + JetBrains Mono)", "Mono (JetBrains Mono)"),
+        default="impacto",
+    ),
+    BriefingField(
+        name="font_size",
+        label="Tamanho da fonte (título)",
+        kind="enum",
+        enum_values=("P", "M", "G"),
+        enum_labels=("Pequeno", "Médio", "Grande"),
+        default="M",
+    ),
 )
 
 
@@ -127,6 +146,32 @@ BRAND = Brand(
         "montserrat_600": _FONTS / "montserrat-600.woff2",
         "playfair_700": _FONTS / "playfair-display-700.woff2",
     },
+
+    # Variantes de fonte selecionáveis no form de nova campanha (B.4).
+    # Primeira ("impacto") é o default — Anton + JetBrains Mono, como
+    # planejado desde B.1.
+    font_options=(
+        FontOption(
+            id="impacto",
+            label="Impacto (Anton + JetBrains Mono)",
+            heading_family="Anton",
+            heading_weight=400,
+            heading_file=_FONTS / "anton-400.woff2",
+            body_family="JetBrains Mono",
+            body_400_file=_FONTS / "jetbrains-mono-400.woff2",
+            body_600_file=_FONTS / "jetbrains-mono-700.woff2",
+        ),
+        FontOption(
+            id="mono",
+            label="Mono (JetBrains Mono)",
+            heading_family="JetBrains Mono",
+            heading_weight=700,
+            heading_file=_FONTS / "jetbrains-mono-700.woff2",
+            body_family="JetBrains Mono",
+            body_400_file=_FONTS / "jetbrains-mono-400.woff2",
+            body_600_file=_FONTS / "jetbrains-mono-700.woff2",
+        ),
+    ),
 
     # TODO B.3: substituir por logo typographic via CSS (sem PNG).
     logo_path=_ASSETS / "logo_mendes_vaz.png",
