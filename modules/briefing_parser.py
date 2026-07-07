@@ -64,6 +64,7 @@ BRIEFING_SCHEMA: dict[str, type] = {
     "upload_filename": str,        # "" = gerar via IA; nome de arquivo = usar foto enviada
     "font_variant": str,           # id de FontOption do brand ativo; "" = default
     "font_size": str,              # "P" | "M" | "G" (tamanho do headline)
+    "image_asset_id": str,         # "" = não usa banco; id = reaproveita imagem já gerada
 }
 
 FONT_SIZES_VALIDAS = {"P", "M", "G"}
@@ -174,6 +175,10 @@ def parse(briefing_raw: dict) -> dict:
     else:
         b["hide_overlay"] = 1 if int(bool(raw_overlay)) else 0
     b["upload_filename"] = (b.get("upload_filename") or "").strip()
+    # image_asset_id (B.5): sem validação de enum aqui — resolvido no pipeline
+    # (pipeline.image_bank.resolver_path), que já cai pro fluxo normal de
+    # Ideogram com log de aviso se o id não existir mais.
+    b["image_asset_id"] = (b.get("image_asset_id") or "").strip()
 
     # --- Fonte (B.4) ---
     # font_variant não valida contra enum estrito aqui: o parser é

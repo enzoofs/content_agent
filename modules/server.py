@@ -42,6 +42,7 @@ from modules import (
     composer,
     copy_generator,
     exporter,
+    image_bank,
     pipeline,
     quotas,
     store,
@@ -828,6 +829,27 @@ def build_app() -> Flask:
         campaign_store.deletar(cid)
         utils.log(cid, "server: campanha apagada.")
         return jsonify({"status": "apagada", "campaign_id": cid})
+
+    @app.route("/api/image-assets", methods=["GET"])
+    def api_image_assets_listar():
+        """Lista os assets do brand ativo (banco de imagens reaproveitáveis, B.5)."""
+        assets = image_bank.listar()
+        return jsonify([
+            {**a, "url": f"/image-bank/{a['filename']}"} for a in assets
+        ])
+
+    @app.route("/api/image-assets/<asset_id>", methods=["DELETE"])
+    def api_image_assets_deletar(asset_id: str):
+        """Apaga um asset do banco (arquivo + registro). Não afeta campanhas
+        que já usaram essa imagem — elas trabalham em cópia, não em link."""
+        apagado = image_bank.deletar(asset_id)
+        if not apagado:
+            return jsonify({"erro": f"Asset {asset_id} não encontrado."}), 404
+        return jsonify({"status": "apagado", "id": asset_id})
+
+    @app.route("/image-bank/<path:filename>")
+    def image_bank_file(filename: str):
+        return send_from_directory(settings.IMAGE_BANK_DIR, filename)
 
     @app.route("/api/campaigns/<cid>/duplicate", methods=["POST"])
     def api_duplicate(cid: str):

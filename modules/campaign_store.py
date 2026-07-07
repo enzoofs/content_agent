@@ -191,6 +191,7 @@ def listar() -> list[dict]:
             "upload_filename": campanha.get("upload_filename") or "",
             "font_variant": campanha.get("font_variant") or "",
             "font_size": campanha.get("font_size") or "M",
+            "image_asset_id": campanha.get("image_asset_id") or "",
         }
         resultado.append({**campanha, "briefing": briefing})
     return resultado
@@ -216,6 +217,7 @@ def read_briefing(campaign_id: str) -> dict | None:
         "upload_filename": (c["upload_filename"] or "") if "upload_filename" in c.keys() else "",
         "font_variant": (c["font_variant"] or "") if "font_variant" in c.keys() else "",
         "font_size": (c["font_size"] or "M") if "font_size" in c.keys() else "M",
+        "image_asset_id": (c["image_asset_id"] or "") if "image_asset_id" in c.keys() else "",
     }
 
 

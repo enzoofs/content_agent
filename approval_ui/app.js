@@ -4,6 +4,7 @@
 let pollTimer = null;
 let calRef = null; // primeiro dia do mês exibido no calendário
 let BRAND = null; // metadata do brand ativo (carregado em loadBrand no boot)
+let pendingImageAsset = null; // asset escolhido em "Banco de imagens" -> "Usar em nova campanha"
 
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", async () => {
@@ -55,6 +56,7 @@ function route() {
   if (hash === "#/novo") return renderNovo();
   if (hash === "#/calendario") return renderCalendario();
   if (hash === "#/historico") return renderHistorico();
+  if (hash === "#/banco-de-imagens") return renderBancoImagens();
   if (m) return renderCampanha(decodeURIComponent(m[1]));
   renderDashboard();
 }
@@ -234,6 +236,118 @@ function historicoCard(c) {
   return card;
 }
 
+// ====================== Banco de imagens (B.5) ======================
+async function renderBancoImagens() {
+  app().innerHTML = dashSkeleton(4);
+  let assets;
+  try {
+    assets = await fetchJSON("/api/image-assets");
+  } catch (e) {
+    return showError(`Erro ao carregar banco de imagens: ${e.message}`);
+  }
+
+  if (!assets.length) {
+    app().innerHTML = `
+      <a class="back" href="#/">← Campanhas</a>
+      <div class="empty">
+        <h2>Banco de imagens vazio</h2>
+        <p>Toda arte de fundo gerada via IA (ou enviada por upload) fica salva aqui
+        pra você reaproveitar em campanhas futuras, sem gastar de novo.</p>
+      </div>`;
+    return;
+  }
+
+  app().innerHTML = `<a class="back" href="#/">← Campanhas</a><h1 class="page-title">Banco de imagens</h1>`;
+  const grid = el("div", "banco-grid");
+  assets.forEach((a) => grid.appendChild(bancoCard(a)));
+  app().appendChild(grid);
+}
+
+function bancoCard(a) {
+  const card = el("div", "banco-card");
+  const img = document.createElement("img");
+  img.src = a.url;
+  img.alt = `${a.formato} · ${a.origem}`;
+  img.className = "banco-card-img";
+  card.appendChild(img);
+
+  card.appendChild(textEl("p", "dash-card-meta", `${a.formato} · ${a.origem}`));
+
+  const actions = el("div", "historico-actions");
+  const usarBtn = textEl("button", "btn btn-approve", "Usar em nova campanha");
+  usarBtn.type = "button";
+  usarBtn.addEventListener("click", () => {
+    pendingImageAsset = a;
+    location.hash = "#/novo";
+  });
+  actions.appendChild(usarBtn);
+
+  const delBtn = textEl("button", "dash-card-del", "Excluir");
+  delBtn.type = "button";
+  delBtn.addEventListener("click", () => apagarImageAsset(a.id));
+  actions.appendChild(delBtn);
+
+  card.appendChild(actions);
+  return card;
+}
+
+async function apagarImageAsset(assetId) {
+  if (!confirm("Excluir esta imagem do banco?\n\nCampanhas que já usaram essa arte não são afetadas.")) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/image-assets/${encodeURIComponent(assetId)}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.erro || `Erro ao excluir (HTTP ${res.status}).`);
+      return;
+    }
+    renderBancoImagens();
+  } catch (e) {
+    alert(`Falha ao excluir: ${e.message}`);
+  }
+}
+
+// Picker inline usado no form de nova campanha quando origem="banco".
+async function carregarBancoPicker() {
+  const picker = document.getElementById("banco-picker");
+  const hiddenInput = document.getElementById("image-asset-id-input");
+  if (!picker || !hiddenInput) return;
+  picker.innerHTML = "<small class=\"form-help\">Carregando…</small>";
+
+  let assets;
+  try {
+    assets = await fetchJSON("/api/image-assets");
+  } catch (e) {
+    picker.innerHTML = `<small class="form-help">Erro ao carregar: ${e.message}</small>`;
+    return;
+  }
+  if (!assets.length) {
+    picker.innerHTML = "<small class=\"form-help\">Banco vazio — gere ou envie uma imagem primeiro.</small>";
+    return;
+  }
+
+  picker.innerHTML = "";
+  assets.forEach((a) => {
+    const thumb = document.createElement("img");
+    thumb.src = a.url;
+    thumb.className = "banco-picker-thumb";
+    thumb.alt = `${a.formato} · ${a.origem}`;
+    thumb.dataset.assetId = a.id;
+    if (pendingImageAsset && pendingImageAsset.id === a.id) {
+      thumb.classList.add("selected");
+      hiddenInput.value = a.id;
+    }
+    thumb.addEventListener("click", () => {
+      picker.querySelectorAll(".banco-picker-thumb").forEach((t) => t.classList.remove("selected"));
+      thumb.classList.add("selected");
+      hiddenInput.value = a.id;
+    });
+    picker.appendChild(thumb);
+  });
+  pendingImageAsset = null; // consumido — não pré-seleciona de novo se o form for re-renderizado
+}
+
 // ====================== Nova campanha ======================
 // Renderiza o form a partir de BRAND.briefing_fields (schema declarativo).
 // Pareamento visual: tom + objetivo e formato + num_slides ficam em form-row
@@ -242,28 +356,33 @@ function renderNovo() {
   const fields = (BRAND && BRAND.briefing_fields) || [];
   const html = renderBriefingFieldsHtml(fields);
 
-  // Bloco de fundo customizado (M&V only). Permite o cliente enviar uma foto
-  // própria (escritório, time) no lugar da arte gerada pelo Ideogram, e
-  // opcionalmente esconder o overlay azul pra a foto aparecer sem filtro.
-  const isMV = !BRAND || !BRAND.slug || BRAND.slug === "mendes_vaz";
-  const uploadHtml = isMV ? `
+  // Bloco de fundo: gerar via IA, enviar foto própria, ou reaproveitar uma
+  // arte do banco de imagens (B.5). Disponível pra qualquer brand — antes
+  // era só M&V, generalizado quando o banco de imagens entrou.
+  const uploadHtml = `
     <fieldset class="form-fieldset">
       <legend>Fundo da imagem</legend>
       <label>Origem do fundo
         <select name="background_source" id="background-source">
           <option value="ia" selected>Gerar com IA (Ideogram)</option>
           <option value="upload">Enviar uma foto minha</option>
+          <option value="banco">Escolher do banco de imagens</option>
         </select>
       </label>
       <label id="wrap-upload" class="hidden">Foto (PNG, JPG ou WEBP)
         <input type="file" name="upload" id="upload-input" accept="image/png,image/jpeg,image/webp">
         <small class="form-help">A mesma foto será usada nas 3 variações.</small>
       </label>
+      <div id="wrap-banco" class="hidden">
+        <small class="form-help">Clique numa imagem pra usar como fundo.</small>
+        <div id="banco-picker" class="banco-picker"></div>
+        <input type="hidden" name="image_asset_id" id="image-asset-id-input">
+      </div>
       <label>
         <input type="checkbox" name="hide_overlay" value="1">
         Esconder a sombra azul sobre a imagem
       </label>
-    </fieldset>` : "";
+    </fieldset>`;
 
   app().innerHTML = `
     <a class="back" href="#/">← Campanhas</a>
@@ -289,15 +408,25 @@ function renderNovo() {
   if (formato) formato.addEventListener("change", sync);
   sync();
 
-  // Toggle do input de arquivo conforme origem (apenas M&V).
+  // Toggle do input de arquivo / picker do banco conforme origem escolhida.
   const bgSrc = document.getElementById("background-source");
   const wrapUpload = document.getElementById("wrap-upload");
-  if (bgSrc && wrapUpload) {
-    const syncUpload = () => {
+  const wrapBanco = document.getElementById("wrap-banco");
+  if (bgSrc && wrapUpload && wrapBanco) {
+    const syncOrigem = () => {
       wrapUpload.classList.toggle("hidden", bgSrc.value !== "upload");
+      wrapBanco.classList.toggle("hidden", bgSrc.value !== "banco");
+      if (bgSrc.value === "banco") carregarBancoPicker();
     };
-    bgSrc.addEventListener("change", syncUpload);
-    syncUpload();
+    bgSrc.addEventListener("change", syncOrigem);
+    syncOrigem();
+  }
+
+  // Se o operador veio da tela "Banco de imagens" clicando em "Usar em nova
+  // campanha", pré-seleciona a origem e a imagem escolhida.
+  if (pendingImageAsset && bgSrc) {
+    bgSrc.value = "banco";
+    bgSrc.dispatchEvent(new Event("change"));
   }
 
   // Preview ao vivo de fonte (B.4): atualiza a cada troca do select, e já
