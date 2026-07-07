@@ -68,7 +68,8 @@ def _build_html(
     return Template(template_text).safe_substitute(mapping)
 
 
-_RENDER_TIMEOUT_MS = 15000  # 15s: tempo limite para a página + fontes carregarem.
+_RENDER_TIMEOUT_MS = 15000   # 15s: tempo limite para set_content (carregamento da página).
+_SCREENSHOT_TIMEOUT_MS = 30000  # 30s: timeout do screenshot (renderização pode ser lenta com imagens grandes).
 
 # Flags pra acelerar o boot do Chromium em ambiente headless de servidor.
 # - disable-dev-shm-usage: evita falhar por /dev/shm pequeno em containers
@@ -109,7 +110,7 @@ def _render_with_browser(browser, html: str, output_path: Path, width: int, heig
             # Como as fontes principais são embarcadas como data URI, seguimos
             # com o screenshot do que já foi pintado.
             print(f"[composer] networkidle timeout, prosseguindo: {e}", flush=True)
-        page.screenshot(path=str(output_path), full_page=False, type="png", timeout=_RENDER_TIMEOUT_MS)
+        page.screenshot(path=str(output_path), full_page=False, type="png", timeout=_SCREENSHOT_TIMEOUT_MS)
     finally:
         page.close()
 
