@@ -48,3 +48,10 @@ desktop.ini
 # Backups locais (snapshots manuais de state.db + campaigns + exports)
 .backup_demo_*/
 .backup_*/
+
+# Claude Code — permissoes/config especifica de cada maquina, nao versionar
+.claude/settings.local.json
+.claude/wip_backup/
+
+# Backups de assets (ex: logo_x.bak.png)
+*.bak.png
