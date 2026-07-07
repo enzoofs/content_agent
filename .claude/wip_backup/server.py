@@ -301,48 +301,6 @@ def _brand_google_fonts_link() -> str:
 
 
 # --------------------------------------------------------------------------
-# Upload de foto própria (alternativa ao Ideogram — M&V)
-# --------------------------------------------------------------------------
-_UPLOAD_EXT_PERMITIDAS = {".png", ".jpg", ".jpeg", ".webp"}
-_UPLOAD_MAX_BYTES = 20 * 1024 * 1024  # 20 MB — foto de celular cabe folgado
-
-
-def _salvar_upload(campaign_id: str, file_storage) -> str:
-    """
-    Persiste o arquivo enviado pelo operador em campaigns/<id>/upload.<ext>.
-
-    Returns:
-        Nome do arquivo salvo (ex.: "upload.jpg") — vai pro briefing.upload_filename.
-
-    Raises:
-        ValueError: extensão não suportada ou arquivo vazio/gigante.
-    """
-    import os
-    nome_orig = file_storage.filename or ""
-    ext = os.path.splitext(nome_orig)[1].lower()
-    if ext not in _UPLOAD_EXT_PERMITIDAS:
-        raise ValueError(
-            f"Formato de imagem não suportado: {ext or '(sem extensão)'}. "
-            f"Aceitos: {sorted(_UPLOAD_EXT_PERMITIDAS)}."
-        )
-    destino_dir = settings.CAMPAIGNS_DIR / campaign_id
-    destino_dir.mkdir(parents=True, exist_ok=True)
-    destino = destino_dir / f"upload{ext}"
-    file_storage.save(str(destino))
-    tamanho = destino.stat().st_size
-    if tamanho == 0:
-        destino.unlink(missing_ok=True)
-        raise ValueError("Arquivo enviado está vazio.")
-    if tamanho > _UPLOAD_MAX_BYTES:
-        destino.unlink(missing_ok=True)
-        raise ValueError(
-            f"Arquivo muito grande ({tamanho // 1024 // 1024} MB). "
-            f"Limite: {_UPLOAD_MAX_BYTES // 1024 // 1024} MB."
-        )
-    return destino.name
-
-
-# --------------------------------------------------------------------------
 # Disparo assíncrono da geração (funções isoladas para facilitar teste/mocks)
 # --------------------------------------------------------------------------
 def _iniciar_geracao_async(briefing: dict) -> None:
@@ -653,17 +611,7 @@ def build_app() -> Flask:
 
     @app.route("/api/campaigns", methods=["POST"])
     def api_criar():
-        # Aceita JSON (fluxo padrão) ou multipart/form-data (quando o operador
-        # envia uma foto pra usar como fundo em vez do Ideogram).
-        upload_file = None
-        if request.content_type and request.content_type.startswith("multipart/form-data"):
-            body = {k: v for k, v in request.form.items()}
-            upload_file = request.files.get("upload")
-            if upload_file and not upload_file.filename:
-                upload_file = None
-        else:
-            body = request.get_json(force=True)
-
+        body = request.get_json(force=True)
         # 1) Quota antes de qualquer parse — falha cedo, sem custo
         try:
             quotas.verificar_pode_criar()
@@ -680,16 +628,6 @@ def build_app() -> Flask:
             briefing = briefing_parser.parse(body)
         except ValueError as e:
             return jsonify({"erro": str(e)}), 400
-
-        # 3) Salva o upload (se houver) DEPOIS do parse — agora temos o
-        #    campaign_id pra rotear o arquivo. Patcha o briefing antes do INSERT
-        #    pra que upload_filename seja persistido junto.
-        if upload_file:
-            try:
-                upload_name = _salvar_upload(briefing["campaign_id"], upload_file)
-            except ValueError as e:
-                return jsonify({"erro": str(e)}), 400
-            briefing["upload_filename"] = upload_name
 
         campaign_store.criar(briefing)
         utils.log(briefing["campaign_id"], "server: campanha criada, iniciando geração.")

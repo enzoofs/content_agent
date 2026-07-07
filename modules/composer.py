@@ -38,15 +38,22 @@ def _font_data_uri(path: Path) -> str:
 
 
 def _build_html(
-    copy: dict, image_path: Path, template_name: str, width: int, height: int
+    copy: dict, image_path: Path, template_name: str, width: int, height: int,
+    hide_overlay: bool = False,
 ) -> str:
-    """Carrega o template e substitui as variáveis com os dados do copy."""
+    """Carrega o template e substitui as variáveis com os dados do copy.
+
+    `hide_overlay=True` remove a sombra azul (gradiente sobre o fundo) — usado
+    quando o operador envia uma foto própria e quer ela visível sem filtro.
+    """
     template_text = (settings.TEMPLATES_DIR / template_name).read_text(encoding="utf-8")
 
     subhead = (copy.get("subheadline") or "").strip()
     subhead_html = (
         f'<p class="subheadline">{escape(subhead)}</p>' if subhead else ""
     )
+
+    overlay_html = "" if hide_overlay else '<div class="overlay"></div>'
 
     mapping = {
         "width": width,
@@ -59,6 +66,7 @@ def _build_html(
         "font_montserrat_400": _font_data_uri(settings.FONT_FILES["montserrat_400"]),
         "font_montserrat_600": _font_data_uri(settings.FONT_FILES["montserrat_600"]),
         "font_playfair_700": _font_data_uri(settings.FONT_FILES["playfair_700"]),
+        "overlay_html": overlay_html,
         "headline": escape(copy["headline"]),
         "subheadline_html": subhead_html,
         "body_text": escape(copy["body"]),
@@ -170,6 +178,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
     """
     campaign_id = briefing["campaign_id"]
     formato = briefing["formato"]
+    hide_overlay = bool(briefing.get("hide_overlay") or 0)
     width, height = settings.POST_SIZES[formato]
     template_name = settings.TEMPLATE_BY_FORMAT[formato]
     out_dir = utils.campaign_composed_dir(campaign_id)
@@ -194,7 +203,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
                         "body": slide["body"],
                         "cta": cta,
                     }
-                    html = _build_html(copy_slide, img, template_name, width, height)
+                    html = _build_html(copy_slide, img, template_name, width, height, hide_overlay=hide_overlay)  # noqa: E501
                     _render_with_browser(browser, html, destino, width, height)
                     paths.append(destino)
             else:
@@ -202,7 +211,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
                 if not img.exists():
                     raise FileNotFoundError(f"Imagem de fundo ausente: {img}")
                 destino = out_dir / f"option_{n}.png"
-                html = _build_html(copy_option, img, template_name, width, height)
+                html = _build_html(copy_option, img, template_name, width, height, hide_overlay=hide_overlay)
                 _render_with_browser(browser, html, destino, width, height)
                 paths.append(destino)
         finally:
@@ -232,6 +241,7 @@ def compose_all(
     """
     campaign_id = briefing["campaign_id"]
     formato = briefing["formato"]
+    hide_overlay = bool(briefing.get("hide_overlay") or 0)
     width, height = settings.POST_SIZES[formato]
     template_name = settings.TEMPLATE_BY_FORMAT[formato]
     out_dir = utils.campaign_composed_dir(campaign_id)
@@ -243,10 +253,12 @@ def compose_all(
                 return _compose_carousel(
                     copy_options, image_paths, briefing,
                     browser, template_name, width, height, out_dir, campaign_id,
+                    hide_overlay=hide_overlay,
                 )
             return _compose_simples(
                 copy_options, image_paths, briefing,
                 browser, template_name, width, height, out_dir, campaign_id,
+                hide_overlay=hide_overlay,
             )
         finally:
             browser.close()
@@ -255,13 +267,14 @@ def compose_all(
 def _compose_simples(
     copy_options, image_paths, briefing,
     browser, template_name, width, height, out_dir, campaign_id,
+    hide_overlay: bool = False,
 ) -> list[Path]:
     """square/portrait: 1 PNG por opção."""
     composed: list[Path] = []
     for copy, image_path in zip(copy_options, image_paths):
         n = copy["option_id"]
         destino = out_dir / f"option_{n}.png"
-        html = _build_html(copy, image_path, template_name, width, height)
+        html = _build_html(copy, image_path, template_name, width, height, hide_overlay=hide_overlay)
         destino.parent.mkdir(parents=True, exist_ok=True)
         _render_with_browser(browser, html, destino, width, height)
         utils.log(campaign_id, f"composer: opção {n} composta -> {destino.name}")
@@ -272,6 +285,7 @@ def _compose_simples(
 def _compose_carousel(
     copy_options, image_paths, briefing,
     browser, template_name, width, height, out_dir, campaign_id,
+    hide_overlay: bool = False,
 ) -> list[list[Path]]:
     """carrossel: N PNGs por opção. Cada slide vira um post com headline/body
     próprios; caption/cta/hashtags (no nível da opção) ficam no metadado."""
@@ -290,7 +304,7 @@ def _compose_carousel(
                 "body": slide["body"],
                 "cta": cta,
             }
-            html = _build_html(copy_slide, image_path, template_name, width, height)
+            html = _build_html(copy_slide, image_path, template_name, width, height, hide_overlay=hide_overlay)
             destino.parent.mkdir(parents=True, exist_ok=True)
             _render_with_browser(browser, html, destino, width, height)
             utils.log(campaign_id, f"composer: opção {n} slide {m} -> {destino.name}")

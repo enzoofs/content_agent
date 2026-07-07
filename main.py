@@ -18,7 +18,7 @@ import argparse
 import sys
 
 from config import settings
-from modules import briefing_parser, campaign_store, pipeline, server, store, utils
+from modules import backup, briefing_parser, campaign_store, pipeline, server, store, utils
 
 
 # --------------------------------------------------------------------------
@@ -215,6 +215,7 @@ def main() -> None:
         _check_chromium()
         _setup_db()
         _recover_orphan_campaigns()
+        backup.start_background_scheduler()
         server.serve()
         return
 

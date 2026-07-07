@@ -1,0 +1,45 @@
+# Não enviar pro build do Docker — reduz tamanho da imagem e evita vazar segredos
+.git
+.gitignore
+.github
+.claude
+.mcp.json
+.env
+.env.*
+!.env.example
+
+# Python local
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Dados gerados localmente — em produção tudo vive em /data (volume)
+state.db
+state.db-*
+campaigns/*/
+exports/*/
+exports/*.png
+exports/*.json
+exports/audit.jsonl
+.backup_*/
+.backup_demo_*/
+
+# Docs / artefatos não necessários em runtime
+*.pdf
+*.odt
+docs/
+README.md
+
+# SO / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Playwright cache local (a imagem base já traz Chromium)
+.playwright/

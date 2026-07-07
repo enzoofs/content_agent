@@ -99,6 +99,17 @@ def marcar_aguardando(campaign_id: str) -> None:
     write_state(campaign_id, status="aguardando_aprovacao", etapa=None)
 
 
+def add_tokens(campaign_id: str, qtd: int) -> None:
+    """Soma `qtd` tokens ao contador da campanha. Silencioso se cid não existe."""
+    if qtd <= 0:
+        return
+    atual = store.get_campaign(campaign_id)
+    if atual is None:
+        return
+    novo = int(atual.get("tokens_used") or 0) + int(qtd)
+    write_state(campaign_id, tokens_used=novo)
+
+
 def set_erro(campaign_id: str, mensagem: str) -> None:
     """Registra falha na geração."""
     write_state(campaign_id, status="erro", erro=mensagem)
@@ -130,6 +141,32 @@ def agendar(campaign_id: str, data_str: str) -> None:
     write_state(campaign_id, data_agendada=data_str)
 
 
+def deletar(campaign_id: str) -> bool:
+    """
+    Apaga a campanha do DB (cascade nas copy_versions) e remove os artefatos
+    em disco: campaigns/{id}/ (imagens, composed, briefing.json legado) e
+    exports/{id}/ (PNGs/metadata/post.txt finais).
+
+    Idempotente: chamar com um id inexistente retorna False sem explodir.
+    Falhas de FS são engolidas — o estado no DB é a fonte da verdade; arquivos
+    órfãos não atrapalham o pipeline.
+
+    Returns:
+        True se a campanha existia no DB e foi apagada; False caso contrário.
+    """
+    import shutil
+    from config import settings
+
+    apagada = store.delete_campaign(campaign_id)
+
+    # Mesmo se o registro do DB não existir, tenta limpar diretórios órfãos
+    for pasta in (settings.CAMPAIGNS_DIR / campaign_id, settings.EXPORTS_DIR / campaign_id):
+        if pasta.exists():
+            shutil.rmtree(pasta, ignore_errors=True)
+
+    return apagada
+
+
 def listar() -> list[dict]:
     """
     Lista todas as campanhas (mais recentes primeiro), com o briefing aninhado.
@@ -150,6 +187,8 @@ def listar() -> list[dict]:
             "num_slides": campanha["num_slides"],
             "referencias": campanha["referencias"] or "",
             "created_at": campanha["created_at"],
+            "hide_overlay": int(campanha.get("hide_overlay") or 0),
+            "upload_filename": campanha.get("upload_filename") or "",
         }
         resultado.append({**campanha, "briefing": briefing})
     return resultado
@@ -171,6 +210,8 @@ def read_briefing(campaign_id: str) -> dict | None:
         "num_slides": c["num_slides"],
         "referencias": c["referencias"] or "",
         "created_at": c["created_at"],
+        "hide_overlay": int(c["hide_overlay"] or 0) if "hide_overlay" in c.keys() else 0,
+        "upload_filename": (c["upload_filename"] or "") if "upload_filename" in c.keys() else "",
     }
 
 

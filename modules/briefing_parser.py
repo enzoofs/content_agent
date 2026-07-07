@@ -60,6 +60,8 @@ BRIEFING_SCHEMA: dict[str, type] = {
     "formato": str,                # "square" | "portrait" | "carousel" | "story"
     "num_slides": int,             # 1 para simples; 3-8 para carrossel
     "referencias": str,            # pode ser ""
+    "hide_overlay": int,           # 0 = mostrar sombra (default); 1 = esconder
+    "upload_filename": str,        # "" = gerar via IA; nome de arquivo = usar foto enviada
 }
 
 TONS_VALIDOS = {"tecnico", "acessivel"}
@@ -159,6 +161,15 @@ def parse(briefing_raw: dict) -> dict:
     # --- Campos opcionais garantidos como string ---
     b["tema_especifico"] = b.get("tema_especifico", "") or ""
     b["referencias"] = b.get("referencias", "") or ""
+
+    # --- Background / overlay (M&V upload de foto própria) ---
+    # hide_overlay aceita bool, int 0/1, ou string "0"/"1"/"true"/"false".
+    raw_overlay = b.get("hide_overlay", 0)
+    if isinstance(raw_overlay, str):
+        b["hide_overlay"] = 1 if raw_overlay.strip().lower() in ("1", "true", "yes", "on") else 0
+    else:
+        b["hide_overlay"] = 1 if int(bool(raw_overlay)) else 0
+    b["upload_filename"] = (b.get("upload_filename") or "").strip()
 
     # --- Campos gerados ---
     b["created_at"] = b.get("created_at") or datetime.now().isoformat(timespec="seconds")

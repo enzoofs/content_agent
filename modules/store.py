@@ -54,7 +54,10 @@ CREATE TABLE IF NOT EXISTS campaigns (
     option_aprovada       INTEGER,
     data_agendada         TEXT,
     erro                  TEXT,
-    atualizado_em         TEXT    NOT NULL
+    atualizado_em         TEXT    NOT NULL,
+    tokens_used           INTEGER NOT NULL DEFAULT 0,
+    hide_overlay          INTEGER NOT NULL DEFAULT 0,
+    upload_filename       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS copy_versions (
@@ -98,7 +101,8 @@ CAMPAIGN_COLUMNS = (
     "campaign_id", "area_direito", "perfil_cliente_ideal", "tom", "objetivo",
     "tema_especifico", "formato", "num_slides", "referencias", "created_at",
     "status", "etapa", "copy_version", "option_aprovada", "data_agendada",
-    "erro", "atualizado_em",
+    "erro", "atualizado_em", "tokens_used",
+    "hide_overlay", "upload_filename",
 )
 
 
@@ -131,6 +135,20 @@ def init_db() -> None:
     """Cria tabelas e índices se não existirem. Idempotente."""
     with connect() as con:
         con.executescript(SCHEMA_SQL)
+        # Migration idempotente: adiciona tokens_used em DBs antigos.
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(campaigns)").fetchall()}
+        if "tokens_used" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN tokens_used INTEGER NOT NULL DEFAULT 0"
+            )
+        if "hide_overlay" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN hide_overlay INTEGER NOT NULL DEFAULT 0"
+            )
+        if "upload_filename" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN upload_filename TEXT"
+            )
 
 
 # Alias retrocompat com nomes legados
@@ -179,6 +197,9 @@ def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy"
         "data_agendada": None,
         "erro": None,
         "atualizado_em": agora,
+        "tokens_used": 0,
+        "hide_overlay": int(briefing.get("hide_overlay") or 0),
+        "upload_filename": briefing.get("upload_filename") or None,
     }
     cols = ", ".join(CAMPAIGN_COLUMNS)
     placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -233,6 +254,20 @@ def update_campaign(campaign_id: str, **campos) -> dict:
         if cur.rowcount == 0:
             raise ValueError(f"Campanha {campaign_id!r} não encontrada.")
     return get_campaign(campaign_id)  # type: ignore[return-value]
+
+
+def delete_campaign(campaign_id: str) -> bool:
+    """
+    Apaga a campanha e suas copy_versions (cascade via FK).
+
+    Returns:
+        True se algo foi apagado, False se a campanha não existia.
+    """
+    with connect() as con:
+        cur = con.execute(
+            "DELETE FROM campaigns WHERE campaign_id = ?", (campaign_id,)
+        )
+    return cur.rowcount > 0
 
 
 def list_campaigns() -> list[dict]:
@@ -361,6 +396,9 @@ def migrate_from_files() -> dict:
             "data_agendada": state.get("data_agendada"),
             "erro": state.get("erro"),
             "atualizado_em": state.get("atualizado_em", agora),
+            "tokens_used": int(state.get("tokens_used", 0) or 0),
+            "hide_overlay": int(state.get("hide_overlay", 0) or 0),
+            "upload_filename": state.get("upload_filename") or None,
         }
         cols = ", ".join(CAMPAIGN_COLUMNS)
         placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)

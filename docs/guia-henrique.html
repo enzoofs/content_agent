@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>TimeLabs — Guia rápido · Central Mendes & Vaz Social</title>
+<meta name="description" content="Guia de operação da Central Mendes & Vaz Social para Henrique Mendes — gerar, ajustar e exportar posts em ~2 minutos.">
+<style>
+  @font-face { font-family: 'Gloock'; src: url('fonts/Gloock-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; font-style: italic; src: url('fonts/InstrumentSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'Instrument Serif'; src: url('fonts/InstrumentSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; src: url('fonts/IBMPlexSerif-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-weight: 700; src: url('fonts/IBMPlexSerif-Bold.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Serif'; font-style: italic; src: url('fonts/IBMPlexSerif-Italic.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; src: url('fonts/IBMPlexMono-Regular.ttf') format('truetype'); font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; font-weight: 700; src: url('fonts/IBMPlexMono-Bold.ttf') format('truetype'); font-display: swap; }
+
+  :root {
+    --paper:      #EFE9DA;
+    --paper-alt:  #FAF8F2;
+    --paper-deep: #E6DFC9;
+    --ink:        #2B2520;
+    --ink-soft:   #6B6258;
+    --ink-faint:  rgba(43,37,32,0.55);
+    --mercury:    #B8902E;
+    --mercury-bright: #E0B03A;
+    --rule:       rgba(43,37,32,0.18);
+    --rule-light: rgba(43,37,32,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  @page { size: A4 portrait; margin: 0; }
+
+  html, body {
+    background: #1a1714;
+    color: var(--ink);
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    background: var(--paper);
+    margin: 0 auto;
+    padding: 24mm 22mm 22mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .page:last-child { page-break-after: avoid; }
+
+  @media screen {
+    body { padding: 32px 0; }
+    .page {
+      margin-bottom: 32px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 6px 20px rgba(0,0,0,0.35);
+    }
+  }
+
+  .reg-mark {
+    position: absolute; width: 10px; height: 10px; opacity: 0.28;
+  }
+  .reg-mark::before, .reg-mark::after {
+    content: ""; position: absolute; background: var(--ink-soft);
+  }
+  .reg-mark::before { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+  .reg-mark::after  { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+  .reg-tl { top: 8mm; left: 8mm; }
+  .reg-tr { top: 8mm; right: 8mm; }
+  .reg-bl { bottom: 8mm; left: 8mm; }
+  .reg-br { bottom: 8mm; right: 8mm; }
+
+  .em { color: var(--mercury); font-style: italic; }
+  .strong { font-weight: 700; }
+
+  .folio {
+    position: absolute;
+    bottom: 12mm;
+    left: 50%; transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 4px;
+    color: var(--ink-soft); opacity: 0.7; text-transform: uppercase;
+  }
+
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 10mm;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule-light);
+  }
+  .section-head .left {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 4px;
+    color: var(--mercury); text-transform: uppercase;
+  }
+  .section-head .right {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt; letter-spacing: 3px;
+    color: var(--ink-soft); text-transform: uppercase; opacity: 0.75;
+  }
+
+  /* CAPA */
+  .cover {
+    background: var(--paper-alt);
+    justify-content: space-between;
+    padding: 28mm 24mm;
+  }
+  .cover-brand {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 5px;
+    color: var(--mercury); text-transform: uppercase;
+  }
+  .cover-title {
+    font-family: 'Gloock', serif;
+    font-size: 44pt;
+    line-height: 1.04;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+    margin-top: auto;
+  }
+  .cover-title .em { font-family: 'Instrument Serif', serif; }
+  .cover-sub {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 16pt;
+    color: var(--ink-soft);
+    margin-top: 10mm;
+    max-width: 130mm;
+    line-height: 1.4;
+  }
+  .cover-meta {
+    margin-top: auto;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt; letter-spacing: 2px;
+    color: var(--ink-soft); text-transform: uppercase;
+  }
+  .cover-meta .right { text-align: right; }
+  .cover-rule {
+    height: 1px; background: var(--rule);
+    margin: 8mm 0;
+  }
+
+  /* PÁGINAS DE CONTEÚDO */
+  h2 {
+    font-family: 'Gloock', serif;
+    font-size: 24pt;
+    line-height: 1.15;
+    color: var(--ink);
+    font-weight: normal;
+    margin-bottom: 4mm;
+  }
+  .lead {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 13pt;
+    color: var(--ink-soft);
+    line-height: 1.45;
+    margin-bottom: 9mm;
+    max-width: 150mm;
+  }
+
+  h3 {
+    font-family: 'Gloock', serif;
+    font-size: 13pt;
+    font-weight: normal;
+    color: var(--ink);
+    margin: 7mm 0 3mm;
+    letter-spacing: 0.2px;
+  }
+  h3 .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9pt;
+    color: var(--mercury);
+    margin-right: 8px;
+    letter-spacing: 3px;
+  }
+
+  p { margin-bottom: 3mm; }
+
+  ol.steps {
+    counter-reset: step;
+    list-style: none;
+    margin: 4mm 0 2mm;
+  }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 16mm;
+    margin-bottom: 5mm;
+    min-height: 11mm;
+  }
+  ol.steps > li::before {
+    content: counter(step, decimal-leading-zero);
+    position: absolute;
+    left: 0; top: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14pt;
+    color: var(--mercury);
+    letter-spacing: 1px;
+  }
+  ol.steps > li .step-title {
+    font-weight: 700;
+    font-family: 'IBM Plex Serif', serif;
+  }
+  ol.steps > li .step-text {
+    color: var(--ink-soft);
+    font-size: 10.5pt;
+    margin-top: 1mm;
+  }
+
+  ul.fields {
+    list-style: none;
+    margin: 3mm 0 2mm;
+    padding-left: 6mm;
+    border-left: 1px solid var(--rule-light);
+  }
+  ul.fields li {
+    margin-bottom: 2.2mm;
+    font-size: 10.5pt;
+  }
+  ul.fields li .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--mercury);
+    margin-right: 6px;
+  }
+  ul.fields li .hint {
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+
+  /* TABELA — problemas/soluções */
+  .trouble {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4mm;
+    font-size: 10pt;
+  }
+  .trouble thead th {
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8pt;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--mercury);
+    padding: 4mm 4mm 3mm 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .trouble tbody td {
+    padding: 4mm 4mm 4mm 0;
+    vertical-align: top;
+    border-bottom: 1px solid var(--rule-light);
+  }
+  .trouble tbody tr:last-child td { border-bottom: none; }
+  .trouble td.symptom {
+    width: 38%;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 11.5pt;
+    color: var(--ink);
+    padding-right: 6mm;
+  }
+  .trouble td.action {
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+
+  /* Bloco de destaque */
+  .callout {
+    background: var(--paper-deep);
+    border-left: 3px solid var(--mercury);
+    padding: 6mm 7mm;
+    margin: 6mm 0;
+    font-family: 'Instrument Serif', serif;
+    font-size: 12pt;
+    font-style: italic;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .callout .label {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-style: normal;
+    font-size: 8pt;
+    letter-spacing: 3px;
+    color: var(--mercury);
+    text-transform: uppercase;
+    margin-bottom: 2mm;
+  }
+
+  /* Card de contato (última página) */
+  .contact-card {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule);
+    padding: 10mm 11mm;
+    margin-top: 6mm;
+  }
+  .contact-card .who {
+    font-family: 'Gloock', serif;
+    font-size: 22pt;
+    color: var(--ink);
+    margin-bottom: 1mm;
+  }
+  .contact-card .role {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 12pt;
+    color: var(--ink-soft);
+    margin-bottom: 5mm;
+  }
+  .contact-card .channel {
+    display: flex; justify-content: space-between;
+    padding: 3mm 0;
+    border-top: 1px solid var(--rule-light);
+    font-size: 10.5pt;
+  }
+  .contact-card .channel .k {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+  }
+  .contact-card .channel .v {
+    font-family: 'IBM Plex Serif', serif;
+    color: var(--ink);
+  }
+
+  .access-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm 8mm;
+    margin: 4mm 0 0;
+  }
+  .access-cell {
+    border-top: 1px solid var(--rule-light);
+    padding-top: 4mm;
+  }
+  .access-cell .k {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5pt; letter-spacing: 2.5px;
+    color: var(--mercury); text-transform: uppercase;
+    margin-bottom: 2mm;
+  }
+  .access-cell .v {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5pt;
+    color: var(--ink);
+    word-break: break-all;
+  }
+  .access-cell .hint {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 10pt;
+    color: var(--ink-soft);
+    margin-top: 1mm;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     CAPA
+     ============================================================ -->
+<section class="page cover">
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="cover-brand">— TimeLabs · MMXXVI</div>
+
+  <div>
+    <div class="cover-title">Guia rápido<br><span class="em">da central.</span></div>
+    <div class="cover-sub">Como gerar, ajustar e exportar um post em dois minutos — preparado para Henrique Mendes, Mendes &amp; Vaz Advocacia.</div>
+  </div>
+
+  <div class="cover-rule"></div>
+
+  <div class="cover-meta">
+    <span>Operação · Mendes &amp; Vaz Social</span>
+    <span class="right">Documento I · Junho · MMXXVI</span>
+  </div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 1 — ACESSO + COMO GERAR
+     ============================================================ -->
+<section class="page">
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">I · Acesso</span>
+    <span class="right">Login da central</span>
+  </div>
+
+  <h2>Onde a central <span class="em">mora</span>.</h2>
+  <p class="lead">A central abre direto no navegador — não precisa instalar nada. Na primeira vez, o navegador pede usuário e senha numa caixinha branca pequena no topo; depois disso, fica lembrado por algumas horas.</p>
+
+  <div class="access-grid">
+    <div class="access-cell">
+      <div class="k">— Endereço</div>
+      <div class="v">content-agent-vrz77a.fly.dev</div>
+      <div class="hint">Funciona em celular, tablet e computador.</div>
+    </div>
+    <div class="access-cell">
+      <div class="k">— Usuário e senha</div>
+      <div class="v">Enviados pelo Enzo</div>
+      <div class="hint">Separadamente, por canal direto.</div>
+    </div>
+  </div>
+
+  <div class="section-head" style="margin-top: 14mm;">
+    <span class="left">II · Gerar um post</span>
+    <span class="right">Cinco passos · dois minutos</span>
+  </div>
+
+  <h2>O fluxo <span class="em">completo</span>.</h2>
+
+  <ol class="steps">
+    <li>
+      <div class="step-title">Abrir uma nova campanha</div>
+      <div class="step-text">Botão <strong>"Nova campanha"</strong> no canto superior direito da tela.</div>
+    </li>
+    <li>
+      <div class="step-title">Preencher o briefing — sete campos</div>
+      <div class="step-text">
+        <ul class="fields">
+          <li><span class="label">Área do direito</span> ex.: Direito Médico</li>
+          <li><span class="label">Cliente ideal</span> ex.: médicos de BH preocupados com processos</li>
+          <li><span class="label">Tom</span> técnico ou acessível</li>
+          <li><span class="label">Objetivo</span> posicionamento · awareness · captação</li>
+          <li><span class="label">Formato</span> square · portrait · story · carrossel</li>
+          <li><span class="label">Nº de slides</span> só pra carrossel</li>
+          <li><span class="label">Tema</span> <span class="hint">opcional — deixe vazio se quiser que a IA escolha</span></li>
+        </ul>
+      </div>
+    </li>
+    <li>
+      <div class="step-title">Clicar em "Gerar"</div>
+      <div class="step-text">Aparece um indicador de progresso por cerca de um a dois minutos.</div>
+    </li>
+    <li>
+      <div class="step-title">Escolher entre as três opções</div>
+      <div class="step-text">Quando o sistema termina, aparecem três variações do post lado a lado.</div>
+    </li>
+    <li>
+      <div class="step-title">Aprovar &amp; exportar</div>
+      <div class="step-text">Selecione a melhor, defina a data de agendamento e clique em <strong>"Exportar"</strong> para baixar imagem + legenda em ZIP, pronto pra postar.</div>
+    </li>
+  </ol>
+
+  <div class="folio">I · IV</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 2 — AJUSTES + PROBLEMAS
+     ============================================================ -->
+<section class="page">
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">III · Ajustes finos</span>
+    <span class="right">Editando antes da aprovação</span>
+  </div>
+
+  <h2>Quando a copy precisa <span class="em">de retoque</span>.</h2>
+  <p class="lead">Se quiser mudar uma palavra, encurtar uma headline ou trocar uma chamada, é possível editar diretamente dentro da opção — sem precisar gerar tudo de novo.</p>
+
+  <ol class="steps">
+    <li>
+      <div class="step-title">Clicar no texto que quer editar</div>
+      <div class="step-text">Dentro da opção, qualquer campo de copy vira editável ao clique.</div>
+    </li>
+    <li>
+      <div class="step-title">Digitar a nova versão</div>
+      <div class="step-text">A edição aparece no campo que se abre logo abaixo.</div>
+    </li>
+    <li>
+      <div class="step-title">Clicar fora para salvar</div>
+      <div class="step-text">Salvamento automático — não tem botão "salvar". A imagem se regenera sozinha em cerca de vinte segundos.</div>
+    </li>
+  </ol>
+
+  <div class="callout">
+    <span class="label">— Lembrete</span>
+    Aprovar é definitivo no fluxo da operação: depois de aprovar, o ZIP exportado é o que vira post no Instagram. Se ainda está em dúvida entre duas opções, vale pedir para gerar de novo antes de aprovar.
+  </div>
+
+  <div class="section-head" style="margin-top: 8mm;">
+    <span class="left">IV · Se algo travar</span>
+    <span class="right">Diagnóstico rápido</span>
+  </div>
+
+  <h2>O que fazer <span class="em">quando</span>.</h2>
+
+  <table class="trouble">
+    <thead>
+      <tr>
+        <th>Sintoma</th>
+        <th>O que fazer</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="symptom">Campanha trava em "gerando…" por mais de cinco minutos</td>
+        <td class="action">Recarregar a página (F5). Se continuar parado depois disso, avisar o Enzo com o ID da campanha.</td>
+      </tr>
+      <tr>
+        <td class="symptom">Imagem com texto bugado ou cortado</td>
+        <td class="action">Reportar pro Enzo com o ID da campanha — costuma ser ajuste de template em minutos.</td>
+      </tr>
+      <tr>
+        <td class="symptom">Erro vermelho na tela</td>
+        <td class="action">Tirar print e mandar no WhatsApp do Enzo. O print ajuda a identificar a causa em segundos.</td>
+      </tr>
+      <tr>
+        <td class="symptom">Esqueceu a senha</td>
+        <td class="action">Mensagem para o Enzo — reset em cerca de um minuto.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="folio">II · IV</div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 3 — LIMITES + SUPORTE
+     ============================================================ -->
+<section class="page">
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="section-head">
+    <span class="left">V · Limites mensais</span>
+    <span class="right">Cota da operação</span>
+  </div>
+
+  <h2>O que está <span class="em">no plano</span>.</h2>
+  <p class="lead">O sistema acompanha o consumo do mês automaticamente — não precisa controlar manualmente. Os indicadores ficam no rodapé da página, sempre visíveis.</p>
+
+  <div class="access-grid">
+    <div class="access-cell">
+      <div class="k">— Campanhas / mês</div>
+      <div class="v">Visível no rodapé</div>
+      <div class="hint">Conta cada campanha gerada no mês corrente.</div>
+    </div>
+    <div class="access-cell">
+      <div class="k">— Agendadas pro futuro</div>
+      <div class="v">Visível no rodapé</div>
+      <div class="hint">Campanhas com data marcada para depois de hoje.</div>
+    </div>
+    <div class="access-cell">
+      <div class="k">— Tokens por campanha</div>
+      <div class="v">Indicador 🪙 no card</div>
+      <div class="hint">Soma copy (texto) + arte (imagem) consumidos pela IA.</div>
+    </div>
+    <div class="access-cell">
+      <div class="k">— Se bater o limite</div>
+      <div class="v">Mensagem ao Enzo</div>
+      <div class="hint">Fácil de aumentar — sem reconfiguração.</div>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top: 10mm;">
+    <span class="label">— Como entender os tokens</span>
+    Cada campanha mostra quantos <strong>tokens</strong> consumiu — é a moeda da IA, que cobre tanto o texto gerado pela OpenAI quanto a arte gerada pela Ideogram. Não precisa fazer conta: o número aparece no card da campanha e na tela de aprovação, e a cota do plano é dimensionada para sobrar folga.
+  </div>
+
+  <div class="section-head" style="margin-top: 14mm;">
+    <span class="left">VI · Suporte</span>
+    <span class="right">Canal direto</span>
+  </div>
+
+  <h2>Quem responde <span class="em">do outro lado</span>.</h2>
+
+  <div class="contact-card">
+    <div class="who">Enzo Ferraz</div>
+    <div class="role">Operação técnica da central — TimeLabs.</div>
+    <div class="channel">
+      <span class="k">— WhatsApp</span>
+      <span class="v">(31) 99669-3572</span>
+    </div>
+    <div class="channel">
+      <span class="k">— Horário normal</span>
+      <span class="v">Comercial · resposta no mesmo dia</span>
+    </div>
+    <div class="channel">
+      <span class="k">— Urgência</span>
+      <span class="v">Ligação direta · algo travado durante demo ou reunião</span>
+    </div>
+  </div>
+
+  <div class="folio">III · IV</div>
+</section>
+
+<!-- ============================================================
+     CONTRACAPA — FECHAMENTO
+     ============================================================ -->
+<section class="page cover">
+  <span class="reg-mark reg-tl"></span>
+  <span class="reg-mark reg-tr"></span>
+  <span class="reg-mark reg-bl"></span>
+  <span class="reg-mark reg-br"></span>
+
+  <div class="cover-brand">— TimeLabs · Operação Mendes &amp; Vaz Social</div>
+
+  <div style="margin-top: auto;">
+    <div class="cover-title" style="font-size: 38pt;">A central <span class="em">é simples</span> de propósito.</div>
+    <div class="cover-sub">Briefing curto, três opções, um clique para aprovar — o resto é trabalho do escritório. Qualquer coisa que sair do roteiro, basta uma mensagem.</div>
+  </div>
+
+  <div class="cover-rule"></div>
+
+  <div class="cover-meta">
+    <span>Documento operacional · uso interno Mendes &amp; Vaz</span>
+    <span class="right">IV · IV</span>
+  </div>
+</section>
+
+</body>
+</html>

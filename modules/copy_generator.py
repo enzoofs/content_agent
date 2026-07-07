@@ -280,6 +280,11 @@ def generate(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[dic
                 ],
             )
             raw_text = response.choices[0].message.content
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                campaign_store.add_tokens(
+                    campaign_id, int(getattr(usage, "total_tokens", 0) or 0)
+                )
             opcoes = (
                 _parse_and_validate_carousel(raw_text, briefing["num_slides"])
                 if is_carousel

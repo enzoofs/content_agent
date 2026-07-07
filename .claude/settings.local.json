@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(findstr :5000)",
+      "PowerShell($env:BRAND = \"gui_raw\"; python main.py --serve)",
+      "Read(//c/Users/ENZOFE~1/AppData/Local/Temp/claude/C--Users-Enzo-Ferraz-OneDrive---Sintese-Biotecnologia-Documentos-content-agent/b3a778ec-fc0a-446b-922e-e684e3478c41/tasks/**)"
+    ]
+  }
+}

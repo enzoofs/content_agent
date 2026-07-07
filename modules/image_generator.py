@@ -20,11 +20,12 @@ import requests
 from PIL import Image, ImageDraw
 
 from config import settings
-from modules import utils
+from modules import campaign_store, utils
 
 
 def generate(
-    copy_options: list[dict], formato: str, campaign_id: str
+    copy_options: list[dict], formato: str, campaign_id: str,
+    upload_path: Path | None = None,
 ) -> list[Path] | list[list[Path]]:
     """
     Gera as imagens de fundo das variações de copy.
@@ -33,6 +34,10 @@ def generate(
         copy_options: saída de copy_generator.generate.
         formato: "square" | "portrait" | "carousel".
         campaign_id: id da campanha (define a pasta de saída).
+        upload_path: foto enviada pelo operador. Quando setado, pula Ideogram
+            inteiramente e usa essa mesma foto pras 3 opções (incluindo todos
+            os slides do carrossel). Útil pra fotos do próprio escritório /
+            equipe — quando o cliente não quer arte gerada por IA.
 
     Returns:
         - square/portrait: list[Path] (uma imagem por opção)
@@ -46,14 +51,17 @@ def generate(
     size = settings.POST_SIZES[formato]
 
     if formato == "carousel":
-        return _generate_carousel(copy_options, formato, size, out_dir, campaign_id)
+        return _generate_carousel(copy_options, formato, size, out_dir, campaign_id, upload_path)
 
     paths: list[Path] = []
     for copy in copy_options:
         n = copy["option_id"]
         destino = out_dir / f"option_{n}.png"
-        prompt = _build_prompt(copy["image_prompt"])
-        _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n)
+        if upload_path is not None:
+            _usar_upload(upload_path, destino, size, campaign_id, n)
+        else:
+            prompt = _build_prompt(copy["image_prompt"])
+            _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n)
         paths.append(destino)
     return paths
 
@@ -64,6 +72,7 @@ def _generate_carousel(
     size: tuple[int, int],
     out_dir: Path,
     campaign_id: str,
+    upload_path: Path | None = None,
 ) -> list[list[Path]]:
     """Gera N imagens por opção (uma por slide) e devolve a estrutura aninhada."""
     todas: list[list[Path]] = []
@@ -73,12 +82,38 @@ def _generate_carousel(
         for slide in copy["slides"]:
             m = slide["slide_id"]
             destino = out_dir / f"option_{n}_slide_{m}.png"
-            prompt = _build_prompt(slide["image_prompt"])
-            # seed combina opção e slide para variar o brilho do placeholder
-            _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n * 10 + m)
+            if upload_path is not None:
+                _usar_upload(upload_path, destino, size, campaign_id, n, slide_id=m)
+            else:
+                prompt = _build_prompt(slide["image_prompt"])
+                # seed combina opção e slide para variar o brilho do placeholder
+                _generate_one(prompt, destino, size, formato, campaign_id, n, seed=n * 10 + m)
             slides_paths.append(destino)
         todas.append(slides_paths)
     return todas
+
+
+def _usar_upload(
+    upload_path: Path, destino: Path, size: tuple[int, int],
+    campaign_id: str, n: int, slide_id: int | None = None,
+) -> None:
+    """
+    Copia a foto enviada pra `destino`, reamostrando pro tamanho do post (cover).
+
+    Mesma foto vai pras 3 opções (e pra todos os slides do carrossel). O texto
+    de cada opção/slide muda no template — só o fundo é compartilhado.
+    """
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(upload_path) as img:
+        img = img.convert("RGB")
+        alvo_w, alvo_h = size
+        escala = max(alvo_w / img.width, alvo_h / img.height)
+        novo = img.resize((round(img.width * escala), round(img.height * escala)))
+        esq = (novo.width - alvo_w) // 2
+        topo = (novo.height - alvo_h) // 2
+        novo.crop((esq, topo, esq + alvo_w, topo + alvo_h)).save(destino, "PNG")
+    rotulo = f"opção {n}" + (f" slide {slide_id}" if slide_id is not None else "")
+    utils.log(campaign_id, f"image_generator: {rotulo} usou foto enviada ({upload_path.name}).")
 
 
 def _generate_one(
@@ -107,6 +142,7 @@ def _generate_with_fallback(
         try:
             _generate_with_ideogram(prompt, destino, formato)
             utils.log(campaign_id, f"image_generator: opção {n} gerada via Ideogram.")
+            campaign_store.add_tokens(campaign_id, settings.IMAGE_TOKEN_EQUIVALENT)
             return
         except Exception as e:
             utils.log(
@@ -129,11 +165,15 @@ def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
     """
     # color_palette omitido de propósito (ver comentário em settings.IDEOGRAM_CONFIG):
     # o branding navy/gold vem do template; a arte tem liberdade de cor.
+    # IDEOGRAM_RESOLUTIONS pode trazer RESOLUTION_* ou ASPECT_* — escolhemos o
+    # campo certo do payload (a API rejeita resolução desconhecida com 400).
+    ratio_or_res = settings.IDEOGRAM_RESOLUTIONS[formato]
+    size_key = "aspect_ratio" if ratio_or_res.startswith("ASPECT_") else "resolution"
     payload = {
         "image_request": {
             "prompt": prompt,
             "model": settings.IDEOGRAM_CONFIG["model"],
-            "resolution": settings.IDEOGRAM_RESOLUTIONS[formato],
+            size_key: ratio_or_res,
             "style_type": settings.IDEOGRAM_CONFIG["style_type"],
             "negative_prompt": settings.IDEOGRAM_CONFIG["negative_prompt"],
         }
@@ -146,7 +186,10 @@ def _generate_with_ideogram(prompt: str, destino: Path, formato: str) -> None:
     }
 
     resp = requests.post(settings.IDEOGRAM_URL, headers=headers, json=payload, timeout=120)
-    resp.raise_for_status()
+    # Surfaceia o corpo do erro (a Ideogram explica o 400 ali — ex.: resolução
+    # inválida). raise_for_status() sozinho esconde isso e dificulta o diagnóstico.
+    if not resp.ok:
+        raise RuntimeError(f"Ideogram {resp.status_code}: {resp.text[:300]}")
     image_url = resp.json()["data"][0]["url"]
 
     img_resp = requests.get(image_url, timeout=120)
