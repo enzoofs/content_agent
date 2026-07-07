@@ -15,6 +15,7 @@ from modules import (
     campaign_store,
     composer,
     copy_generator,
+    image_bank,
     image_generator,
     utils,
 )
@@ -42,26 +43,53 @@ def gerar(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[Path]:
         copy_options = copy_generator.generate(briefing, nota_ajuste, versao=versao)
 
         campaign_store.set_etapa(cid, "arte")
-        # Se o operador enviou uma foto, ela vira o fundo das 3 opções
-        # (e de todos os slides do carrossel) — Ideogram é pulado.
-        upload_name = (briefing.get("upload_filename") or "").strip()
-        upload_path = None
-        if upload_name:
-            candidato = settings.CAMPAIGNS_DIR / cid / upload_name
-            if candidato.exists():
-                upload_path = candidato
-            else:
-                utils.log(cid, f"pipeline: upload_filename={upload_name!r} não encontrado, caindo pra Ideogram.")
+        formato = briefing["formato"]
+        veio_do_banco = False
+
+        # Prioridade 1: imagem escolhida no banco reaproveitável (B.5) — pula
+        # Ideogram sem custo. Se o id não existir mais, cai pro fluxo normal
+        # (mesmo espírito do fallback de upload_filename ausente, abaixo).
+        asset_id = (briefing.get("image_asset_id") or "").strip()
+        upload_path = image_bank.resolver_path(asset_id) if asset_id else None
+        if asset_id and upload_path is None:
+            utils.log(cid, f"pipeline: image_asset_id={asset_id!r} não encontrado no banco, caindo pra Ideogram.")
+        veio_do_banco = upload_path is not None
+
+        # Prioridade 2: foto enviada pelo operador nesta campanha — vira o
+        # fundo das 3 opções (e de todos os slides do carrossel).
+        if upload_path is None:
+            upload_name = (briefing.get("upload_filename") or "").strip()
+            if upload_name:
+                candidato = settings.CAMPAIGNS_DIR / cid / upload_name
+                if candidato.exists():
+                    upload_path = candidato
+                else:
+                    utils.log(cid, f"pipeline: upload_filename={upload_name!r} não encontrado, caindo pra Ideogram.")
+
         # Só passa upload_path como kwarg quando setado, pra não quebrar mocks de
         # testes que monkey-patcham image_generator.generate sem esse parâmetro.
         if upload_path is not None:
             image_paths = image_generator.generate(
-                copy_options, briefing["formato"], cid, upload_path=upload_path,
+                copy_options, formato, cid, upload_path=upload_path,
             )
         else:
             image_paths = image_generator.generate(
-                copy_options, briefing["formato"], cid,
+                copy_options, formato, cid,
             )
+
+        # Registra a arte de fundo no banco reaproveitável (B.5), pra o
+        # operador poder reusar em campanhas futuras. Só formatos simples
+        # (carrossel gera N imagens por opção — poluiria o banco rápido) e só
+        # quando a imagem é "nova" (não veio do próprio banco, e não é
+        # placeholder mock — que não tem valor de reaproveitamento real).
+        if formato != "carousel" and not veio_do_banco and not settings.USE_MOCK_IMAGES:
+            origem = "upload" if upload_path is not None else "ideogram"
+            try:
+                image_bank.registrar(cid, formato, image_paths, origem)
+            except Exception as e:
+                # Nunca quebra a campanha por causa do banco de imagens —
+                # é uma conveniência, não parte crítica do pipeline.
+                utils.log(cid, f"pipeline: falha ao registrar no banco de imagens (não-fatal): {e}")
 
         campaign_store.set_etapa(cid, "composicao")
         composed = composer.compose_all(copy_options, image_paths, briefing)

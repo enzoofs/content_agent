@@ -32,6 +32,10 @@ exports/audit.jsonl
 !campaigns/.gitkeep
 !exports/.gitkeep
 
+# Banco de imagens reaproveitáveis (gerado em runtime — ver image_assets no DB)
+assets/image_bank/*
+!assets/image_bank/.gitkeep
+
 # LibreOffice / acidentes (ex: alguém abriu .env no LibreOffice)
 *.odt
 

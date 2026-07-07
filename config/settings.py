@@ -26,6 +26,12 @@ EXPORTS_DIR = BASE_DIR / "exports"
 APPROVAL_UI_DIR = BASE_DIR / "approval_ui"
 FONTS_DIR = ASSETS_DIR / "fonts"
 
+# Banco de imagens reaproveitáveis (B.5) — artes de fundo já geradas/enviadas
+# que o operador pode reusar numa campanha nova, pulando o Ideogram. Fica
+# FORA de campaigns/ de propósito: campaign_store.deletar() faz rmtree na
+# pasta da campanha, e uma imagem salva aqui não pode sumir junto.
+IMAGE_BANK_DIR = ASSETS_DIR / "image_bank"
+
 # --------------------------------------------------------------------------
 # Brand atual (extraído por cliente em config/brands/ — Fase B.1)
 # --------------------------------------------------------------------------

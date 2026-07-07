@@ -62,6 +62,7 @@ BRIEFING_SCHEMA: dict[str, type] = {
     "referencias": str,            # pode ser ""
     "hide_overlay": int,           # 0 = mostrar sombra (default); 1 = esconder
     "upload_filename": str,        # "" = gerar via IA; nome de arquivo = usar foto enviada
+    "image_asset_id": str,         # "" = não usa banco; id = reaproveita imagem já gerada
 }
 
 TONS_VALIDOS = {"tecnico", "acessivel"}
@@ -170,6 +171,10 @@ def parse(briefing_raw: dict) -> dict:
     else:
         b["hide_overlay"] = 1 if int(bool(raw_overlay)) else 0
     b["upload_filename"] = (b.get("upload_filename") or "").strip()
+    # image_asset_id (B.5): sem validação de enum aqui — resolvido no pipeline
+    # (pipeline.image_bank.resolver_path), que já cai pro fluxo normal de
+    # Ideogram com log de aviso se o id não existir mais.
+    b["image_asset_id"] = (b.get("image_asset_id") or "").strip()
 
     # --- Campos gerados ---
     b["created_at"] = b.get("created_at") or datetime.now().isoformat(timespec="seconds")

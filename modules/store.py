@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
     atualizado_em         TEXT    NOT NULL,
     tokens_used           INTEGER NOT NULL DEFAULT 0,
     hide_overlay          INTEGER NOT NULL DEFAULT 0,
-    upload_filename       TEXT
+    upload_filename       TEXT,
+    image_asset_id        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS copy_versions (
@@ -88,6 +89,21 @@ CREATE TABLE IF NOT EXISTS briefing_templates (
     referencias           TEXT    NOT NULL DEFAULT '',
     created_at            TEXT    NOT NULL
 );
+
+-- Banco de imagens reaproveitáveis (B.5): artes de fundo (Ideogram ou
+-- upload) que o operador pode reusar numa campanha nova. Arquivo físico
+-- vive em assets/image_bank/<filename> — fora de campaigns/, não é
+-- afetado por campaign_store.deletar().
+CREATE TABLE IF NOT EXISTS image_assets (
+    id                  TEXT    PRIMARY KEY,
+    brand_slug          TEXT    NOT NULL,
+    origem_campaign_id  TEXT,
+    origem              TEXT    NOT NULL,   -- "ideogram" | "upload"
+    formato             TEXT    NOT NULL,   -- "square" | "portrait" | "story"
+    filename            TEXT    NOT NULL,
+    created_at          TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_image_assets_brand ON image_assets(brand_slug);
 """
 
 # Colunas editáveis de briefing_templates (id e created_at são geridos pelo DB).
@@ -102,7 +118,7 @@ CAMPAIGN_COLUMNS = (
     "tema_especifico", "formato", "num_slides", "referencias", "created_at",
     "status", "etapa", "copy_version", "option_aprovada", "data_agendada",
     "erro", "atualizado_em", "tokens_used",
-    "hide_overlay", "upload_filename",
+    "hide_overlay", "upload_filename", "image_asset_id",
 )
 
 
@@ -148,6 +164,10 @@ def init_db() -> None:
         if "upload_filename" not in cols:
             con.execute(
                 "ALTER TABLE campaigns ADD COLUMN upload_filename TEXT"
+            )
+        if "image_asset_id" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN image_asset_id TEXT"
             )
 
 
@@ -200,6 +220,7 @@ def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy"
         "tokens_used": 0,
         "hide_overlay": int(briefing.get("hide_overlay") or 0),
         "upload_filename": briefing.get("upload_filename") or None,
+        "image_asset_id": briefing.get("image_asset_id") or None,
     }
     cols = ", ".join(CAMPAIGN_COLUMNS)
     placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -399,6 +420,7 @@ def migrate_from_files() -> dict:
             "tokens_used": int(state.get("tokens_used", 0) or 0),
             "hide_overlay": int(state.get("hide_overlay", 0) or 0),
             "upload_filename": state.get("upload_filename") or None,
+            "image_asset_id": state.get("image_asset_id") or None,
         }
         cols = ", ".join(CAMPAIGN_COLUMNS)
         placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -503,6 +525,59 @@ def delete_template(template_id: int) -> bool:
         cur = con.execute(
             "DELETE FROM briefing_templates WHERE id = ?", (template_id,)
         )
+    return cur.rowcount > 0
+
+
+# --------------------------------------------------------------------------
+# Banco de imagens reaproveitáveis (B.5)
+# --------------------------------------------------------------------------
+def _row_to_image_asset(row: sqlite3.Row) -> dict:
+    return {k: row[k] for k in row.keys()}
+
+
+def insert_image_asset(
+    asset_id: str, brand_slug: str, origem: str, formato: str, filename: str,
+    origem_campaign_id: str | None = None,
+) -> dict:
+    """Registra uma imagem no banco reaproveitável. O arquivo físico já deve
+    ter sido copiado pra assets/image_bank/<filename> por quem chama."""
+    from datetime import datetime
+    agora = datetime.now().isoformat(timespec="seconds")
+    with connect() as con:
+        con.execute(
+            """
+            INSERT INTO image_assets
+                (id, brand_slug, origem_campaign_id, origem, formato, filename, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (asset_id, brand_slug, origem_campaign_id, origem, formato, filename, agora),
+        )
+    return get_image_asset(asset_id)  # type: ignore[return-value]
+
+
+def list_image_assets(brand_slug: str) -> list[dict]:
+    """Lista os assets do brand, mais recentes primeiro."""
+    with connect() as con:
+        rows = con.execute(
+            "SELECT * FROM image_assets WHERE brand_slug = ? ORDER BY created_at DESC",
+            (brand_slug,),
+        ).fetchall()
+    return [_row_to_image_asset(r) for r in rows]
+
+
+def get_image_asset(asset_id: str) -> dict | None:
+    """Lê um asset por id (None se não existir)."""
+    with connect() as con:
+        row = con.execute(
+            "SELECT * FROM image_assets WHERE id = ?", (asset_id,)
+        ).fetchone()
+    return _row_to_image_asset(row) if row else None
+
+
+def delete_image_asset(asset_id: str) -> bool:
+    """Apaga o registro do asset (o arquivo físico é apagado por quem chama)."""
+    with connect() as con:
+        cur = con.execute("DELETE FROM image_assets WHERE id = ?", (asset_id,))
     return cur.rowcount > 0
 
 

@@ -189,6 +189,7 @@ def listar() -> list[dict]:
             "created_at": campanha["created_at"],
             "hide_overlay": int(campanha.get("hide_overlay") or 0),
             "upload_filename": campanha.get("upload_filename") or "",
+            "image_asset_id": campanha.get("image_asset_id") or "",
         }
         resultado.append({**campanha, "briefing": briefing})
     return resultado
@@ -212,6 +213,7 @@ def read_briefing(campaign_id: str) -> dict | None:
         "created_at": c["created_at"],
         "hide_overlay": int(c["hide_overlay"] or 0) if "hide_overlay" in c.keys() else 0,
         "upload_filename": (c["upload_filename"] or "") if "upload_filename" in c.keys() else "",
+        "image_asset_id": (c["image_asset_id"] or "") if "image_asset_id" in c.keys() else "",
     }
 
 
