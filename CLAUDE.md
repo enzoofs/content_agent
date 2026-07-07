@@ -140,3 +140,9 @@ Violar qualquer um destes e bug grave, nao decisao tecnica:
 - Quando expandir pra multi-marca, **sempre perguntar: isso vale pra
   Mendes & Vaz E pro Gui?** Se so vale pra um, esta no lugar errado
   (provavelmente em brand config, nao em codigo).
+- **A partir de 2026-07-07: revisao obrigatoria do Marcos antes de merge
+  na `main`.** Todo trabalho vai em branch propria (`feature/`, `fix/`,
+  `refactor/` — ver convencao global). **Nunca dar merge/push direto na
+  `main`** mesmo com aprovacao do Enzo — a branch fica aberta (com PR, se
+  fizer sentido) ate o Marcos validar. So faz o merge apos confirmacao
+  explicita dele.
