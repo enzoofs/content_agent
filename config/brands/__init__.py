@@ -48,6 +48,25 @@ class BriefingField:
 
 
 @dataclass(frozen=True)
+class FontOption:
+    """
+    Uma variante de tipografia selecionável pelo operador no form de nova
+    campanha (B.4 — autonomia de fonte). Cada brand define sua própria lista
+    curada em `Brand.font_options` — o operador escolhe entre elas, nunca
+    digita uma fonte livre.
+    """
+
+    id: str                  # chave enviada no briefing (ex.: "classico")
+    label: str                # rótulo visível na UI (ex.: "Clássico")
+    heading_family: str       # nome CSS da família do headline
+    heading_weight: int       # peso do headline (400/600/700...)
+    heading_file: Path        # .woff2 do headline
+    body_family: str          # nome CSS da família do corpo/subhead/cta
+    body_400_file: Path       # .woff2 peso regular do corpo
+    body_600_file: Path       # .woff2 peso semibold do corpo
+
+
+@dataclass(frozen=True)
 class Brand:
     """Configuração visual e textual de um cliente (imutável)."""
 
@@ -109,6 +128,11 @@ class Brand:
     # brand porque os campos são diferentes).
     briefing_fields: tuple[BriefingField, ...] = ()
     slug_fields: tuple[str, ...] = ()
+
+    # Variantes de fonte selecionáveis (B.4). Vazio = brand ainda não migrou
+    # pra seleção de fonte — composer cai pro font_files fixo (retrocompat).
+    # Primeiro item da tupla é o default.
+    font_options: tuple[FontOption, ...] = ()
     build_user_message: Callable[[dict, str], str] = field(default=lambda b, n="": "")
     build_user_message_carousel: Callable[[dict, str], str] = field(default=lambda b, n="": "")
 

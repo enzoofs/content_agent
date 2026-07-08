@@ -1,30 +1,29 @@
 <!DOCTYPE html>
 <!-- post_portrait.html — Post retrato 1080×1350.
      Mais altura => headline maior e mais respiro vertical. Mesmas variáveis
-     do post_square.html. Substituição via string.Template ($var).
-     Inclui placeholders de fonte: $font_playfair_700 $font_montserrat_400 $font_montserrat_600 -->
+     do post_square.html. Substituição via string.Template ($var). -->
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
 <style>
   /* Fontes embarcadas como data URI (offline-safe — ver post_square.html). */
   @font-face {
-    font-family: 'Playfair Display';
+    font-family: '$font_heading_family';
     font-style: normal;
-    font-weight: 700;
-    src: url('$font_playfair_700') format('woff2');
+    font-weight: $font_heading_weight;
+    src: url('$font_heading_file') format('woff2');
   }
   @font-face {
-    font-family: 'Montserrat';
+    font-family: '$font_body_family';
     font-style: normal;
     font-weight: 400;
-    src: url('$font_montserrat_400') format('woff2');
+    src: url('$font_body_400_file') format('woff2');
   }
   @font-face {
-    font-family: 'Montserrat';
+    font-family: '$font_body_family';
     font-style: normal;
     font-weight: 600;
-    src: url('$font_montserrat_600') format('woff2');
+    src: url('$font_body_600_file') format('woff2');
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,7 +33,7 @@
     height: ${height}px;
     overflow: hidden;
     position: relative;
-    font-family: 'Montserrat', sans-serif;
+    font-family: '$font_body_family', sans-serif;
   }
 
   .bg {
@@ -73,9 +72,9 @@
   }
 
   .headline {
-    font-family: 'Playfair Display', serif;
-    font-weight: 700;
-    font-size: 62px;
+    font-family: '$font_heading_family', serif;
+    font-weight: $font_heading_weight;
+    font-size: ${headline_size}px;
     line-height: 1.12;
     color: #FFFFFF;
     margin-bottom: 18px;
@@ -83,7 +82,7 @@
   }
 
   .subheadline {
-    font-family: 'Montserrat', sans-serif;
+    font-family: '$font_body_family', sans-serif;
     font-weight: 600;
     font-size: 19px;
     color: rgba(255,255,255,0.8);
@@ -93,7 +92,7 @@
   }
 
   .body-text {
-    font-family: 'Montserrat', sans-serif;
+    font-family: '$font_body_family', sans-serif;
     font-weight: 400;
     font-size: 20px;
     line-height: 1.7;
@@ -108,7 +107,7 @@
     background: transparent;
     border: 1.5px solid $gold;
     color: $gold;
-    font-family: 'Montserrat', sans-serif;
+    font-family: '$font_body_family', sans-serif;
     font-weight: 600;
     font-size: 14px;
     text-transform: uppercase;

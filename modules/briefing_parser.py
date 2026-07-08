@@ -62,7 +62,12 @@ BRIEFING_SCHEMA: dict[str, type] = {
     "referencias": str,            # pode ser ""
     "hide_overlay": int,           # 0 = mostrar sombra (default); 1 = esconder
     "upload_filename": str,        # "" = gerar via IA; nome de arquivo = usar foto enviada
+    "font_variant": str,           # id de FontOption do brand ativo; "" = default
+    "font_size": str,              # "P" | "M" | "G" (tamanho do headline)
+    "image_asset_id": str,         # "" = não usa banco; id = reaproveita imagem já gerada
 }
+
+FONT_SIZES_VALIDAS = {"P", "M", "G"}
 
 TONS_VALIDOS = {"tecnico", "acessivel"}
 OBJETIVOS_VALIDOS = {"awareness", "captacao", "posicionamento"}
@@ -170,6 +175,23 @@ def parse(briefing_raw: dict) -> dict:
     else:
         b["hide_overlay"] = 1 if int(bool(raw_overlay)) else 0
     b["upload_filename"] = (b.get("upload_filename") or "").strip()
+    # image_asset_id (B.5): sem validação de enum aqui — resolvido no pipeline
+    # (pipeline.image_bank.resolver_path), que já cai pro fluxo normal de
+    # Ideogram com log de aviso se o id não existir mais.
+    b["image_asset_id"] = (b.get("image_asset_id") or "").strip()
+
+    # --- Fonte (B.4) ---
+    # font_variant não valida contra enum estrito aqui: o parser é
+    # brand-agnóstico e não conhece as FontOption do brand ativo — a
+    # resolução segura (fallback pro default) acontece no composer.
+    b["font_variant"] = (b.get("font_variant") or "").strip()
+    font_size = (b.get("font_size") or "M").strip().upper()
+    if font_size not in FONT_SIZES_VALIDAS:
+        raise ValueError(
+            f"Campo 'font_size' deve ser um de {sorted(FONT_SIZES_VALIDAS)}; "
+            f"recebido: {b.get('font_size')!r}."
+        )
+    b["font_size"] = font_size
 
     # --- Campos gerados ---
     b["created_at"] = b.get("created_at") or datetime.now().isoformat(timespec="seconds")

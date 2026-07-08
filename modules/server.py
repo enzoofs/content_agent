@@ -42,6 +42,7 @@ from modules import (
     composer,
     copy_generator,
     exporter,
+    image_bank,
     pipeline,
     quotas,
     store,
@@ -123,6 +124,22 @@ _DEFAULT_BRIEFING_FIELDS = (
         max_chars=2000,
         rows=2,
     ),
+    BriefingField(
+        name="font_variant",
+        label="Fonte",
+        kind="enum",
+        enum_values=("classico", "elegante", "moderno"),
+        enum_labels=("Clássico (Playfair + Montserrat)", "Elegante (Cormorant + Montserrat)", "Moderno (Montserrat)"),
+        default="classico",
+    ),
+    BriefingField(
+        name="font_size",
+        label="Tamanho da fonte (título)",
+        kind="enum",
+        enum_values=("P", "M", "G"),
+        enum_labels=("Pequeno", "Médio", "Grande"),
+        default="M",
+    ),
 )
 
 
@@ -150,6 +167,20 @@ def _serialize_briefing_field(f: BriefingField) -> dict:
     }
 
 
+def _serialize_font_option(opt) -> dict:
+    """Serializa uma FontOption pra payload JSON da UI (preview ao vivo, B.4)."""
+    return {
+        "id": opt.id,
+        "label": opt.label,
+        "heading_family": opt.heading_family,
+        "heading_weight": opt.heading_weight,
+        "heading_url": f"/fonts/{opt.heading_file.name}",
+        "body_family": opt.body_family,
+        "body_400_url": f"/fonts/{opt.body_400_file.name}",
+        "body_600_url": f"/fonts/{opt.body_600_file.name}",
+    }
+
+
 def _brand_payload() -> dict:
     """Metadata do brand ativo pra UI consumir via /api/brand."""
     b = settings.brand
@@ -160,6 +191,7 @@ def _brand_payload() -> dict:
         "fonts": dict(b.fonts),
         "logo_url": "/brand-logo",
         "briefing_fields": [_serialize_briefing_field(f) for f in _brand_briefing_fields()],
+        "font_options": [_serialize_font_option(o) for o in b.font_options],
     }
 
 
@@ -642,6 +674,11 @@ def build_app() -> Flask:
         """Metadata do brand ativo (nome, paleta, fontes, briefing_fields)."""
         return jsonify(_brand_payload())
 
+    @app.route("/fonts/<path:filename>")
+    def fonts(filename: str):
+        """Serve .woff2 estático pro preview ao vivo de fonte na UI (B.4)."""
+        return send_from_directory(settings.FONTS_DIR, filename)
+
     @app.route("/composed/<cid>/<path:filename>")
     def composed(cid: str, filename: str):
         return send_from_directory(settings.CAMPAIGNS_DIR / cid / "composed", filename)
@@ -792,6 +829,27 @@ def build_app() -> Flask:
         campaign_store.deletar(cid)
         utils.log(cid, "server: campanha apagada.")
         return jsonify({"status": "apagada", "campaign_id": cid})
+
+    @app.route("/api/image-assets", methods=["GET"])
+    def api_image_assets_listar():
+        """Lista os assets do brand ativo (banco de imagens reaproveitáveis, B.5)."""
+        assets = image_bank.listar()
+        return jsonify([
+            {**a, "url": f"/image-bank/{a['filename']}"} for a in assets
+        ])
+
+    @app.route("/api/image-assets/<asset_id>", methods=["DELETE"])
+    def api_image_assets_deletar(asset_id: str):
+        """Apaga um asset do banco (arquivo + registro). Não afeta campanhas
+        que já usaram essa imagem — elas trabalham em cópia, não em link."""
+        apagado = image_bank.deletar(asset_id)
+        if not apagado:
+            return jsonify({"erro": f"Asset {asset_id} não encontrado."}), 404
+        return jsonify({"status": "apagado", "id": asset_id})
+
+    @app.route("/image-bank/<path:filename>")
+    def image_bank_file(filename: str):
+        return send_from_directory(settings.IMAGE_BANK_DIR, filename)
 
     @app.route("/api/campaigns/<cid>/duplicate", methods=["POST"])
     def api_duplicate(cid: str):

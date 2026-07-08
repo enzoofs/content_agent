@@ -11,7 +11,7 @@ Estes valores eram hardcoded em config/settings.py até a extração de brands
 
 from pathlib import Path
 
-from config.brands import Brand, BriefingField
+from config.brands import Brand, BriefingField, FontOption
 
 
 # --- Formatadores de user message (Fase B.3.1) ----------------------------
@@ -93,6 +93,41 @@ BRAND = Brand(
         "montserrat_600": _FONTS / "montserrat-600.woff2",
         "playfair_700": _FONTS / "playfair-display-700.woff2",
     },
+
+    # Variantes de fonte selecionáveis no form de nova campanha (B.4).
+    # Primeira ("classico") é o default — idêntica ao visual original do M&V.
+    font_options=(
+        FontOption(
+            id="classico",
+            label="Clássico (Playfair + Montserrat)",
+            heading_family="Playfair Display",
+            heading_weight=700,
+            heading_file=_FONTS / "playfair-display-700.woff2",
+            body_family="Montserrat",
+            body_400_file=_FONTS / "montserrat-400.woff2",
+            body_600_file=_FONTS / "montserrat-600.woff2",
+        ),
+        FontOption(
+            id="elegante",
+            label="Elegante (Cormorant Garamond + Montserrat)",
+            heading_family="Cormorant Garamond",
+            heading_weight=600,
+            heading_file=_FONTS / "cormorant-garamond-600.woff2",
+            body_family="Montserrat",
+            body_400_file=_FONTS / "montserrat-400.woff2",
+            body_600_file=_FONTS / "montserrat-600.woff2",
+        ),
+        FontOption(
+            id="moderno",
+            label="Moderno (Montserrat + Montserrat)",
+            heading_family="Montserrat",
+            heading_weight=600,
+            heading_file=_FONTS / "montserrat-600.woff2",
+            body_family="Montserrat",
+            body_400_file=_FONTS / "montserrat-400.woff2",
+            body_600_file=_FONTS / "montserrat-600.woff2",
+        ),
+    ),
 
     logo_path=_ASSETS / "logo_mendes_vaz.png",
 

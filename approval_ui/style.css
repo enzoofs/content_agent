@@ -486,6 +486,26 @@ body {
 .form input::placeholder, .form textarea::placeholder { color: var(--ink-4); }
 .form textarea { resize: vertical; line-height: 1.5; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+/* Preview de fonte fica ao lado do select, não embaixo — a lista nativa do
+   <select> abre por cima do que vem logo abaixo dela na tela, então
+   empilhar tamparia o preview toda vez que o dropdown abrisse. */
+.font-field { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: stretch; }
+.font-preview {
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
+  border: 1px solid var(--line-medium);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink-1);
+  font-size: 28px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+}
+@media (max-width: 560px) {
+  .font-field { grid-template-columns: 1fr; }
+}
 .form-erro {
   background: rgba(176,65,62,0.1);
   color: var(--red);
@@ -1183,6 +1203,45 @@ body {
   flex-wrap: wrap;
 }
 .historico-actions .btn { text-decoration: none; display: inline-block; }
+
+/* ---------- Banco de imagens (B.5) ---------- */
+.banco-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-6);
+}
+.banco-card {
+  background: var(--surface-1);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.banco-card-img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+.banco-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.banco-picker-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.banco-picker-thumb:hover { border-color: var(--line-strong); }
+.banco-picker-thumb.selected { border-color: var(--gold); }
 
 /* ---------- Focus rings (acessibilidade real) ---------- */
 a:focus,
