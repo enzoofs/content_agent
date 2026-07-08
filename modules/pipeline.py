@@ -84,8 +84,13 @@ def gerar(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[Path]:
         # placeholder mock — que não tem valor de reaproveitamento real).
         if formato != "carousel" and not veio_do_banco and not settings.USE_MOCK_IMAGES:
             origem = "upload" if upload_path is not None else "ideogram"
+            # Upload usa a MESMA foto nas 3 opções (image_generator só copia o
+            # arquivo) — registrar as 3 poluiria o banco com duplicatas
+            # idênticas. Ideogram gera arte diferente por opção, então registra
+            # todas.
+            imagens_para_registrar = image_paths[:1] if origem == "upload" else image_paths
             try:
-                image_bank.registrar(cid, formato, image_paths, origem)
+                image_bank.registrar(cid, formato, imagens_para_registrar, origem)
             except Exception as e:
                 # Nunca quebra a campanha por causa do banco de imagens —
                 # é uma conveniência, não parte crítica do pipeline.

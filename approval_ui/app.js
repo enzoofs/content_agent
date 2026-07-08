@@ -269,6 +269,7 @@ function bancoCard(a) {
   img.src = a.url;
   img.alt = `${a.formato} · ${a.origem}`;
   img.className = "banco-card-img";
+  img.addEventListener("click", () => openModal(a.url));
   card.appendChild(img);
 
   card.appendChild(textEl("p", "dash-card-meta", `${a.formato} · ${a.origem}`));
