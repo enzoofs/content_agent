@@ -372,6 +372,8 @@ function renderNovo() {
       <label id="wrap-upload" class="hidden">Foto (PNG, JPG ou WEBP)
         <input type="file" name="upload" id="upload-input" accept="image/png,image/jpeg,image/webp">
         <small class="form-help">A mesma foto será usada nas 3 variações.</small>
+        <small class="form-help" id="upload-res-hint"></small>
+        <small class="form-help form-warning hidden" id="upload-res-warning"></small>
       </label>
       <div id="wrap-banco" class="hidden">
         <small class="form-help">Clique numa imagem pra usar como fundo.</small>
@@ -420,6 +422,25 @@ function renderNovo() {
     };
     bgSrc.addEventListener("change", syncOrigem);
     syncOrigem();
+  }
+
+  // Aviso de resolução ideal (espelha settings.POST_SIZES) — atualiza a dica
+  // conforme o formato escolhido e valida a foto assim que ela é selecionada,
+  // pra o operador saber ANTES de gerar se a foto vai perder nitidez.
+  const formatoSelect = document.querySelector('#form-novo [name="formato"]');
+  const uploadInputEl = document.getElementById("upload-input");
+  if (formatoSelect) {
+    formatoSelect.addEventListener("change", () => {
+      atualizarDicaResolucao(formatoSelect.value);
+      if (uploadInputEl && uploadInputEl.files[0]) validarResolucaoUpload(uploadInputEl.files[0], formatoSelect.value);
+    });
+    atualizarDicaResolucao(formatoSelect.value);
+  }
+  if (uploadInputEl) {
+    uploadInputEl.addEventListener("change", () => {
+      const file = uploadInputEl.files[0];
+      if (file) validarResolucaoUpload(file, formatoSelect ? formatoSelect.value : "square");
+    });
   }
 
   // Se o operador veio da tela "Banco de imagens" clicando em "Usar em nova
@@ -522,6 +543,44 @@ function atualizarPreviewFonte(fontOptionId) {
   `;
   preview.style.fontFamily = `'preview-heading-${opt.id}', serif`;
   preview.dataset.bodyFamily = `'preview-body-${opt.id}', sans-serif`;
+}
+
+// Espelha config/settings.py:POST_SIZES — mantenha em sincronia se mudar lá.
+const POST_SIZES_PREVIEW = {
+  square: [1080, 1080],
+  portrait: [1080, 1350],
+  carousel: [1080, 1080],
+  story: [1080, 1920],
+};
+
+function atualizarDicaResolucao(formato) {
+  const hint = document.getElementById("upload-res-hint");
+  if (!hint) return;
+  const [w, h] = POST_SIZES_PREVIEW[formato] || POST_SIZES_PREVIEW.square;
+  hint.textContent = `Resolução ideal para este formato: ${w}×${h}px (mínimo recomendado). Fotos menores serão ampliadas e podem sair borradas.`;
+}
+
+// Lê as dimensões reais do arquivo escolhido (client-side, sem upload) e avisa
+// se ficar abaixo do ideal — o backend ainda ajusta a imagem da melhor forma
+// possível (crop + reamostragem em image_generator.py:_usar_upload), mas
+// ampliar uma foto pequena sempre perde nitidez, então o aviso é preventivo.
+function validarResolucaoUpload(file, formato) {
+  const warning = document.getElementById("upload-res-warning");
+  if (!warning) return;
+  const [alvoW, alvoH] = POST_SIZES_PREVIEW[formato] || POST_SIZES_PREVIEW.square;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    if (img.naturalWidth < alvoW || img.naturalHeight < alvoH) {
+      warning.textContent = `⚠ Sua foto tem ${img.naturalWidth}×${img.naturalHeight}px, abaixo do ideal (${alvoW}×${alvoH}px). Ela será ampliada e pode sair com menos nitidez.`;
+      warning.classList.remove("hidden");
+    } else {
+      warning.classList.add("hidden");
+    }
+  };
+  img.onerror = () => URL.revokeObjectURL(url);
+  img.src = url;
 }
 
 function escapeAttr(s) {

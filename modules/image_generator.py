@@ -104,15 +104,27 @@ def _usar_upload(
     de cada opção/slide muda no template — só o fundo é compartilhado.
     """
     destino.parent.mkdir(parents=True, exist_ok=True)
+    rotulo = f"opção {n}" + (f" slide {slide_id}" if slide_id is not None else "")
     with Image.open(upload_path) as img:
         img = img.convert("RGB")
         alvo_w, alvo_h = size
         escala = max(alvo_w / img.width, alvo_h / img.height)
-        novo = img.resize((round(img.width * escala), round(img.height * escala)))
+        if escala > 1:
+            # Foto menor que o post final — precisa ampliar, o que sempre perde
+            # nitidez. LANCZOS é o resample de melhor qualidade do Pillow pra
+            # isso (o aviso pro operador já sai antes, no upload, no front).
+            utils.log(
+                campaign_id,
+                f"image_generator: {rotulo} — foto enviada ({img.width}x{img.height}) "
+                f"menor que o alvo ({alvo_w}x{alvo_h}); ampliando ~{escala:.2f}x.",
+            )
+        novo = img.resize(
+            (round(img.width * escala), round(img.height * escala)),
+            resample=Image.LANCZOS,
+        )
         esq = (novo.width - alvo_w) // 2
         topo = (novo.height - alvo_h) // 2
         novo.crop((esq, topo, esq + alvo_w, topo + alvo_h)).save(destino, "PNG")
-    rotulo = f"opção {n}" + (f" slide {slide_id}" if slide_id is not None else "")
     utils.log(campaign_id, f"image_generator: {rotulo} usou foto enviada ({upload_path.name}).")
 
 
@@ -206,7 +218,10 @@ def _resize_to_post(path: Path, size: tuple[int, int]) -> None:
         img = img.convert("RGB")
         alvo_w, alvo_h = size
         escala = max(alvo_w / img.width, alvo_h / img.height)
-        novo = img.resize((round(img.width * escala), round(img.height * escala)))
+        novo = img.resize(
+            (round(img.width * escala), round(img.height * escala)),
+            resample=Image.LANCZOS,
+        )
         esq = (novo.width - alvo_w) // 2
         topo = (novo.height - alvo_h) // 2
         novo.crop((esq, topo, esq + alvo_w, topo + alvo_h)).save(path)
