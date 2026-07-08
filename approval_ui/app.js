@@ -432,9 +432,13 @@ function renderNovo() {
   // Preview ao vivo de fonte (B.4): atualiza a cada troca do select, e já
   // renderiza a variante default no boot do form.
   const fontSelect = document.querySelector('#form-novo [name="font_variant"]');
+  const fontSizeSelect = document.querySelector('#form-novo [name="font_size"]');
   if (fontSelect) {
-    fontSelect.addEventListener("change", (e) => atualizarPreviewFonte(e.target.value));
-    atualizarPreviewFonte(fontSelect.value);
+    fontSelect.addEventListener("change", (e) => atualizarPreviewFonte(e.target.value, fontSizeSelect && fontSizeSelect.value));
+    atualizarPreviewFonte(fontSelect.value, fontSizeSelect && fontSizeSelect.value);
+  }
+  if (fontSizeSelect) {
+    fontSizeSelect.addEventListener("change", (e) => atualizarTamanhoPreviewFonte(e.target.value));
   }
 
   document.getElementById("form-novo").addEventListener("submit", onSubmitNovo);
@@ -492,18 +496,21 @@ function renderField(f) {
   }
 
   const help = f.help ? `<small class="form-help">${escapeHtml(f.help)}</small>` : "";
-  // font_variant ganha um preview ao vivo logo abaixo do select (B.4) —
-  // atualizado 100% client-side via atualizarPreviewFonte, sem round-trip.
-  const preview = f.name === "font_variant"
-    ? `<div id="font-preview" class="font-preview">Título de exemplo</div>`
-    : "";
-  return `<label id="${wrapId}"${wrapCls}>${escapeHtml(f.label)}${req}${input}${help}</label>${preview}`;
+  // font_variant ganha um preview ao vivo ao lado do select (B.4) — atualizado
+  // 100% client-side via atualizarPreviewFonte, sem round-trip. Fica ao lado
+  // (não embaixo) porque a lista nativa do <select> abre por cima do que vem
+  // logo abaixo dela, tampando o preview se ele estivesse empilhado.
+  const label = `<label id="${wrapId}"${wrapCls}>${escapeHtml(f.label)}${req}${input}${help}</label>`;
+  if (f.name === "font_variant") {
+    return `<div class="font-field">${label}<div id="font-preview" class="font-preview">Título de exemplo</div></div>`;
+  }
+  return label;
 }
 
 // Injeta/atualiza um <style> com @font-face apontando pros arquivos da
 // variante escolhida, e aplica a font-family no bloco de preview. Roda
 // inteiramente no navegador — sem chamar o servidor a cada troca.
-function atualizarPreviewFonte(fontOptionId) {
+function atualizarPreviewFonte(fontOptionId, fontSize) {
   const preview = document.getElementById("font-preview");
   if (!preview) return;
   const opt = (BRAND && BRAND.font_options || []).find((o) => o.id === fontOptionId)
@@ -522,6 +529,19 @@ function atualizarPreviewFonte(fontOptionId) {
   `;
   preview.style.fontFamily = `'preview-heading-${opt.id}', serif`;
   preview.dataset.bodyFamily = `'preview-body-${opt.id}', sans-serif`;
+  atualizarTamanhoPreviewFonte(fontSize);
+}
+
+// Escala do preview espelha _FONT_SIZE_SCALES do composer.py (P/M/G do
+// campo font_size) sobre o tamanho-base de 28px do .font-preview.
+const FONT_SIZE_SCALES_PREVIEW = { P: 0.85, M: 1.0, G: 1.15 };
+const FONT_PREVIEW_BASE_PX = 28;
+
+function atualizarTamanhoPreviewFonte(fontSize) {
+  const preview = document.getElementById("font-preview");
+  if (!preview) return;
+  const escala = FONT_SIZE_SCALES_PREVIEW[fontSize] || FONT_SIZE_SCALES_PREVIEW.M;
+  preview.style.fontSize = `${FONT_PREVIEW_BASE_PX * escala}px`;
 }
 
 function escapeAttr(s) {

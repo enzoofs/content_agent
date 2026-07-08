@@ -486,7 +486,13 @@ body {
 .form input::placeholder, .form textarea::placeholder { color: var(--ink-4); }
 .form textarea { resize: vertical; line-height: 1.5; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+/* Preview de fonte fica ao lado do select, não embaixo — a lista nativa do
+   <select> abre por cima do que vem logo abaixo dela na tela, então
+   empilhar tamparia o preview toda vez que o dropdown abrisse. */
+.font-field { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: stretch; }
 .font-preview {
+  display: flex;
+  align-items: center;
   padding: var(--space-4);
   border: 1px solid var(--line-medium);
   border-radius: var(--radius-md);
@@ -496,7 +502,9 @@ body {
   font-weight: 700;
   text-transform: none;
   letter-spacing: normal;
-  margin-top: calc(var(--space-2) * -1);
+}
+@media (max-width: 560px) {
+  .font-field { grid-template-columns: 1fr; }
 }
 .form-erro {
   background: rgba(176,65,62,0.1);
