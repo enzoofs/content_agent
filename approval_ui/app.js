@@ -1049,6 +1049,12 @@ function renderAprovada(data) {
   const cid = data.briefing.campaign_id;
   const dlUrl = `/api/campaigns/${encodeURIComponent(cid)}/download`;
 
+  // Preview rápido do que foi aprovado, sem precisar baixar o .zip — reusa as
+  // composed_image_url/slides que a API já devolve em `options` (servidas por
+  // /composed/<cid>/..., diferente dos caminhos de exports/ que são só do
+  // servidor).
+  const aprovada = (data.options || []).find((o) => String(o.option_id) === String(op));
+
   app().innerHTML = `
     <a class="back" href="#/">← Campanhas</a>
     <div class="done-card">
@@ -1061,10 +1067,25 @@ function renderAprovada(data) {
       </a>
     </div>
 
+    <div id="aprovada-preview"></div>
+
     <details class="export-paths">
       <summary class="export-paths-title">Arquivos no servidor (avançado)</summary>
       <div class="export-list" id="export-list"></div>
     </details>`;
+
+  const previewWrap = document.getElementById("aprovada-preview");
+  if (aprovada) {
+    if (Array.isArray(aprovada.slides)) {
+      previewWrap.appendChild(carouselPreview(aprovada));
+    } else {
+      const img = el("img", "card-preview");
+      img.src = aprovada.composed_image_url;
+      img.alt = `Opção ${aprovada.option_id}`;
+      img.addEventListener("click", () => openModal(aprovada.composed_image_url));
+      previewWrap.appendChild(img);
+    }
+  }
 
   const list = document.getElementById("export-list");
   if (exp.post_txt) list.appendChild(exportRow("Texto pra postar (post.txt)", exp.post_txt));
