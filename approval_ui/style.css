@@ -519,6 +519,9 @@ body {
   color: var(--ink-3);
   line-height: 1.5;
 }
+.form-warning {
+  color: var(--red);
+}
 
 /* Barra de templates acima do formulário de nova campanha */
 .template-bar {
