@@ -13,7 +13,12 @@ flask>=3.0.0
 waitress>=3.0.0
 
 # Composição final: renderiza HTML/CSS -> PNG
-playwright>=1.44.0
+# Pinado em 1.60.0 pra bater com o Chromium já embutido na imagem base do
+# Dockerfile (mcr.microsoft.com/playwright/python:v1.60.0-jammy) — versão
+# solta aqui deixa o pip puxar um Playwright mais novo sem o executável do
+# Chromium correspondente na imagem, e o healthcheck de Chromium derruba o
+# container em crash-loop no deploy.
+playwright==1.60.0
 
 # Carrega variáveis de ambiente do .env
 python-dotenv>=1.0.0
