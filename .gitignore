@@ -49,6 +49,9 @@ desktop.ini
 .vscode/
 .idea/
 
+# Claude Code — config local por máquina (paths/permissões específicas do dev)
+.claude/settings.local.json
+
 # Backups locais (snapshots manuais de state.db + campaigns + exports)
 .backup_demo_*/
 .backup_*/
