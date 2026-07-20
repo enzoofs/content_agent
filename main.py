@@ -15,6 +15,7 @@ deixa pronta para aprovação na central:
 from __future__ import annotations
 
 import argparse
+import pathlib
 import sys
 
 from config import settings
@@ -90,11 +91,17 @@ def _recover_orphan_campaigns() -> None:
 
 def _check_chromium() -> None:
     """
-    Garante que o Chromium do Playwright está instalado e abre.
+    Garante que o Chromium do Playwright está instalado.
 
     Sem isso, a composição quebra dentro da thread de geração e o usuário
     fica vendo "Gerando..." sem entender o motivo. Falha aqui é fatal — a
     central inteira depende do composer.
+
+    Checa só a existência do executável (sem abrir/fechar um browser real):
+    abrir um Chromium inteiro nesse ponto soma segundos ao boot, e no Fly.io
+    (máquina dorme com auto_stop_machines) isso empurra o cold-start pra além
+    do timeout do proxy, que devolve HTML de erro em vez de proxyar pro
+    Flask — o front então tenta parsear HTML como JSON e quebra.
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -106,8 +113,9 @@ def _check_chromium() -> None:
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
-            browser.close()
+            executavel = pathlib.Path(p.chromium.executable_path)
+            if not executavel.is_file():
+                raise FileNotFoundError(executavel)
     except Exception as e:
         sys.exit(
             f"❌ Chromium do Playwright indisponível: {e}\n"
