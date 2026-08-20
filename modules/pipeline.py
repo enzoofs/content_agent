@@ -66,9 +66,32 @@ def gerar(briefing: dict, nota_ajuste: str = "", versao: int = 1) -> list[Path]:
                 else:
                     utils.log(cid, f"pipeline: upload_filename={upload_name!r} não encontrado, caindo pra Ideogram.")
 
-        # Só passa upload_path como kwarg quando setado, pra não quebrar mocks de
-        # testes que monkey-patcham image_generator.generate sem esse parâmetro.
-        if upload_path is not None:
+        # Prioridade 3 (só carrossel): 1 foto por slide, na ordem que o
+        # operador escolheu no reordenador do form — diferente do upload_path
+        # acima, que reusa a MESMA foto em todos os slides.
+        upload_paths = None
+        if formato == "carousel":
+            nomes = briefing.get("upload_filenames") or []
+            if nomes:
+                candidatos = [settings.CAMPAIGNS_DIR / cid / nome for nome in nomes]
+                existentes = [p for p in candidatos if p.exists()]
+                if len(existentes) == len(candidatos):
+                    upload_paths = existentes
+                else:
+                    utils.log(
+                        cid,
+                        f"pipeline: upload_filenames incompleto ({len(existentes)}/{len(candidatos)} "
+                        "encontrados), caindo pro fluxo padrão.",
+                    )
+
+        # Só passa upload_path/upload_paths como kwarg quando setado, pra não
+        # quebrar mocks de testes que monkey-patcham image_generator.generate
+        # sem esses parâmetros.
+        if upload_paths is not None:
+            image_paths = image_generator.generate(
+                copy_options, formato, cid, upload_paths=upload_paths,
+            )
+        elif upload_path is not None:
             image_paths = image_generator.generate(
                 copy_options, formato, cid, upload_path=upload_path,
             )

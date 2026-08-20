@@ -60,7 +60,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
     upload_filename       TEXT,
     font_variant          TEXT,
     font_size             TEXT    NOT NULL DEFAULT 'M',
-    image_asset_id        TEXT
+    image_asset_id        TEXT,
+    layout                TEXT,
+    upload_filenames      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS copy_versions (
@@ -121,6 +123,7 @@ CAMPAIGN_COLUMNS = (
     "status", "etapa", "copy_version", "option_aprovada", "data_agendada",
     "erro", "atualizado_em", "tokens_used",
     "hide_overlay", "upload_filename", "font_variant", "font_size", "image_asset_id",
+    "layout", "upload_filenames",
 )
 
 
@@ -179,6 +182,14 @@ def init_db() -> None:
             con.execute(
                 "ALTER TABLE campaigns ADD COLUMN image_asset_id TEXT"
             )
+        if "layout" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN layout TEXT"
+            )
+        if "upload_filenames" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN upload_filenames TEXT"
+            )
 
 
 # Alias retrocompat com nomes legados
@@ -233,6 +244,11 @@ def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy"
         "font_variant": briefing.get("font_variant") or None,
         "font_size": briefing.get("font_size") or "M",
         "image_asset_id": briefing.get("image_asset_id") or None,
+        "layout": briefing.get("layout") or None,
+        "upload_filenames": (
+            json.dumps(briefing["upload_filenames"], ensure_ascii=False)
+            if briefing.get("upload_filenames") else None
+        ),
     }
     cols = ", ".join(CAMPAIGN_COLUMNS)
     placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -435,6 +451,11 @@ def migrate_from_files() -> dict:
             "font_variant": state.get("font_variant") or None,
             "font_size": state.get("font_size") or "M",
             "image_asset_id": state.get("image_asset_id") or None,
+            "layout": state.get("layout") or None,
+            "upload_filenames": (
+                json.dumps(state["upload_filenames"], ensure_ascii=False)
+                if state.get("upload_filenames") else None
+            ),
         }
         cols = ", ".join(CAMPAIGN_COLUMNS)
         placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)

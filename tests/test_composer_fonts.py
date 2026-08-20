@@ -57,15 +57,15 @@ def test_resolve_font_option_fallback_pro_default_quando_id_invalido():
 # _resolve_headline_size
 # --------------------------------------------------------------------------
 def test_resolve_headline_size_escala_por_p_m_g():
-    base = composer._HEADLINE_BASE_SIZE["post_square.html"]
-    assert composer._resolve_headline_size("post_square.html", "M") == base
-    assert composer._resolve_headline_size("post_square.html", "P") < base
-    assert composer._resolve_headline_size("post_square.html", "G") > base
+    base = composer._HEADLINE_BASE_SIZE["square"]
+    assert composer._resolve_headline_size("square", "M") == base
+    assert composer._resolve_headline_size("square", "P") < base
+    assert composer._resolve_headline_size("square", "G") > base
 
 
 def test_resolve_headline_size_cai_pro_m_quando_invalido():
-    assert composer._resolve_headline_size("post_square.html", "XL") == (
-        composer._resolve_headline_size("post_square.html", "M")
+    assert composer._resolve_headline_size("square", "XL") == (
+        composer._resolve_headline_size("square", "M")
     )
 
 
@@ -74,8 +74,9 @@ def test_resolve_headline_size_cai_pro_m_quando_invalido():
 # --------------------------------------------------------------------------
 def test_build_html_substitui_placeholders_de_fonte(tmp_path):
     opt = settings.brand.font_options[1]  # "elegante"
+    tpl = settings.template_path("square", settings.DEFAULT_LAYOUT)
     html = composer._build_html(
-        _copy_padrao(), _bg(tmp_path), "post_square.html", 1080, 1080,
+        _copy_padrao(), _bg(tmp_path), tpl, "square", 1080, 1080,
         font_option=opt, font_size="G",
     )
     assert opt.heading_family in html
@@ -86,8 +87,9 @@ def test_build_html_substitui_placeholders_de_fonte(tmp_path):
 
 
 def test_build_html_usa_default_quando_font_option_none(tmp_path):
+    tpl = settings.template_path("square", settings.DEFAULT_LAYOUT)
     html = composer._build_html(
-        _copy_padrao(), _bg(tmp_path), "post_square.html", 1080, 1080,
+        _copy_padrao(), _bg(tmp_path), tpl, "square", 1080, 1080,
     )
     default = composer._default_font_option()
     assert default.heading_family in html

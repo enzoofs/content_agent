@@ -118,3 +118,42 @@ def test_font_variant_aceita_string_livre_sem_validar_enum():
 def test_font_variant_default_vazio_quando_ausente():
     out = bp.parse(_briefing_minimo())
     assert out["font_variant"] == ""
+
+
+# --------------------------------------------------------------------------
+# Layout visual
+# --------------------------------------------------------------------------
+def test_layout_aceita_string_livre_sem_validar_enum():
+    """Parser é brand-agnóstico — não conhece as LayoutOption do brand ativo,
+    então aceita qualquer id; a resolução segura acontece no composer."""
+    b = _briefing_minimo()
+    b["layout"] = "cartao"
+    out = bp.parse(b)
+    assert out["layout"] == "cartao"
+
+
+def test_layout_default_vazio_quando_ausente():
+    out = bp.parse(_briefing_minimo())
+    assert out["layout"] == ""
+
+
+# --------------------------------------------------------------------------
+# Upload multi-foto de carrossel
+# --------------------------------------------------------------------------
+def test_upload_filenames_normaliza_lista_e_ordem():
+    b = _briefing_minimo()
+    b["upload_filenames"] = ["upload_slide_1.png", " upload_slide_2.png ", ""]
+    out = bp.parse(b)
+    assert out["upload_filenames"] == ["upload_slide_1.png", "upload_slide_2.png"]
+
+
+def test_upload_filenames_default_lista_vazia():
+    out = bp.parse(_briefing_minimo())
+    assert out["upload_filenames"] == []
+
+
+def test_upload_filenames_ignora_valor_nao_lista():
+    b = _briefing_minimo()
+    b["upload_filenames"] = "nao_eh_lista.png"
+    out = bp.parse(b)
+    assert out["upload_filenames"] == []

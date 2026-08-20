@@ -23,20 +23,45 @@ from string import Template
 from playwright.sync_api import sync_playwright
 
 from config import settings
-from config.brands import FontOption
+from config.brands import FontOption, LayoutOption
 from modules import utils
 
-# Tamanho base do headline (px) por template — calibrado visualmente pra
-# cada formato. Escalado por _FONT_SIZE_SCALES conforme o campo font_size
-# do briefing (P/M/G). Só o headline é escalado nesta primeira versão —
-# subheadline/body/cta ficam fixos pra reduzir risco de overflow de layout.
+# Tamanho base do headline (px) por FORMATO — calibrado visualmente. É uma
+# propriedade do formato (dimensão do post), não do layout: todos os
+# layouts de um mesmo formato compartilham a mesma base, escalada por
+# _FONT_SIZE_SCALES conforme o campo font_size do briefing (P/M/G). Só o
+# headline é escalado nesta primeira versão — subheadline/body/cta ficam
+# fixos pra reduzir risco de overflow de layout.
 _HEADLINE_BASE_SIZE = {
-    "post_square.html": 52,
-    "post_portrait.html": 62,
-    "carousel_slide.html": 50,
-    "story.html": 84,
+    "square": 52,
+    "portrait": 62,
+    "carousel": 50,
+    "story": 84,
 }
 _FONT_SIZE_SCALES = {"P": 0.85, "M": 1.0, "G": 1.15}
+
+
+def _default_layout_option() -> LayoutOption:
+    """Fallback quando o brand ativo não define `layout_options` (legado)."""
+    return LayoutOption(id=settings.DEFAULT_LAYOUT, label="Default")
+
+
+def _resolve_layout_option(briefing: dict) -> LayoutOption:
+    """
+    Resolve o layout escolhido no briefing (`layout`) contra
+    `settings.brand.layout_options`. Cai pro primeiro item (default do
+    brand) se o id vier ausente/desconhecido, e pro fallback fixo se o
+    brand não definir `layout_options` — nunca quebra o pipeline por causa
+    de uma variante inválida (mesmo espírito de `_resolve_font_option`).
+    """
+    options = settings.brand.layout_options
+    if not options:
+        return _default_layout_option()
+    layout_id = (briefing.get("layout") or "").strip()
+    for opt in options:
+        if opt.id == layout_id:
+            return opt
+    return options[0]
 
 
 def _default_font_option() -> FontOption:
@@ -75,9 +100,9 @@ def _resolve_font_option(briefing: dict) -> FontOption:
     return options[0]
 
 
-def _resolve_headline_size(template_name: str, font_size: str) -> int:
-    """Tamanho do headline (px) pro template, escalado por P/M/G."""
-    base = _HEADLINE_BASE_SIZE.get(template_name, 52)
+def _resolve_headline_size(formato: str, font_size: str) -> int:
+    """Tamanho do headline (px) pro formato, escalado por P/M/G."""
+    base = _HEADLINE_BASE_SIZE.get(formato, 52)
     escala = _FONT_SIZE_SCALES.get((font_size or "M").strip().upper(), 1.0)
     return round(base * escala)
 
@@ -94,12 +119,16 @@ def _font_data_uri(path: Path) -> str:
 
 
 def _build_html(
-    copy: dict, image_path: Path, template_name: str, width: int, height: int,
+    copy: dict, image_path: Path, template_file: Path, formato: str, width: int, height: int,
     hide_overlay: bool = False,
     font_option: FontOption | None = None,
     font_size: str = "M",
 ) -> str:
     """Carrega o template e substitui as variáveis com os dados do copy.
+
+    `template_file` é o caminho já resolvido (ver `settings.template_path`),
+    e `formato` só é usado pra calibrar o tamanho do headline
+    (`_HEADLINE_BASE_SIZE` é por formato, não por layout).
 
     `hide_overlay=True` remove a sombra azul (gradiente sobre o fundo) — usado
     quando o operador envia uma foto própria e quer ela visível sem filtro.
@@ -107,7 +136,7 @@ def _build_html(
     `font_option`/`font_size` controlam a tipografia (B.4) — `font_option=None`
     cai pro fallback legado (`_default_font_option`).
     """
-    template_text = (settings.TEMPLATES_DIR / template_name).read_text(encoding="utf-8")
+    template_text = Path(template_file).read_text(encoding="utf-8")
 
     subhead = (copy.get("subheadline") or "").strip()
     subhead_html = (
@@ -131,7 +160,7 @@ def _build_html(
         "font_body_family": font_option.body_family,
         "font_body_400_file": _font_data_uri(font_option.body_400_file),
         "font_body_600_file": _font_data_uri(font_option.body_600_file),
-        "headline_size": _resolve_headline_size(template_name, font_size),
+        "headline_size": _resolve_headline_size(formato, font_size),
         "overlay_html": overlay_html,
         "headline": escape(copy["headline"]),
         "subheadline_html": subhead_html,
@@ -201,7 +230,8 @@ def render_html_to_png(html: str, output_path: Path, width: int, height: int) ->
 def compose(
     copy: dict,
     image_path: Path,
-    template_name: str,
+    template_file: Path,
+    formato: str,
     output_path: Path,
     width: int,
     height: int,
@@ -212,14 +242,15 @@ def compose(
     Args:
         copy: uma variação de copy.
         image_path: imagem de fundo correspondente.
-        template_name: arquivo em templates/ (ex: "post_square.html").
+        template_file: caminho resolvido do template (ver `settings.template_path`).
+        formato: "square" | "portrait" | "carousel" | "story" — calibra o headline.
         output_path: onde salvar o PNG final.
         width, height: dimensões do post.
 
     Returns:
         Path do PNG gerado.
     """
-    html = _build_html(copy, image_path, template_name, width, height)
+    html = _build_html(copy, image_path, template_file, formato, width, height)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     render_html_to_png(html, output_path, width, height)
     return output_path
@@ -246,8 +277,9 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
     hide_overlay = bool(briefing.get("hide_overlay") or 0)
     font_option = _resolve_font_option(briefing)
     font_size = briefing.get("font_size") or "M"
+    layout_option = _resolve_layout_option(briefing)
     width, height = settings.POST_SIZES[formato]
-    template_name = settings.TEMPLATE_BY_FORMAT[formato]
+    template_file = settings.template_path(formato, layout_option.id)
     out_dir = utils.campaign_composed_dir(campaign_id)
     images_dir = utils.campaign_images_dir(campaign_id)
     n = copy_option["option_id"]
@@ -270,7 +302,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
                         "body": slide["body"],
                         "cta": cta,
                     }
-                    html = _build_html(copy_slide, img, template_name, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+                    html = _build_html(copy_slide, img, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
                     _render_with_browser(browser, html, destino, width, height)
                     paths.append(destino)
             else:
@@ -278,7 +310,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
                 if not img.exists():
                     raise FileNotFoundError(f"Imagem de fundo ausente: {img}")
                 destino = out_dir / f"option_{n}.png"
-                html = _build_html(copy_option, img, template_name, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+                html = _build_html(copy_option, img, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
                 _render_with_browser(browser, html, destino, width, height)
                 paths.append(destino)
         finally:
@@ -311,8 +343,9 @@ def compose_all(
     hide_overlay = bool(briefing.get("hide_overlay") or 0)
     font_option = _resolve_font_option(briefing)
     font_size = briefing.get("font_size") or "M"
+    layout_option = _resolve_layout_option(briefing)
     width, height = settings.POST_SIZES[formato]
-    template_name = settings.TEMPLATE_BY_FORMAT[formato]
+    template_file = settings.template_path(formato, layout_option.id)
     out_dir = utils.campaign_composed_dir(campaign_id)
 
     with sync_playwright() as p:
@@ -321,12 +354,12 @@ def compose_all(
             if formato == "carousel":
                 return _compose_carousel(
                     copy_options, image_paths, briefing,
-                    browser, template_name, width, height, out_dir, campaign_id,
+                    browser, template_file, formato, width, height, out_dir, campaign_id,
                     hide_overlay=hide_overlay, font_option=font_option, font_size=font_size,
                 )
             return _compose_simples(
                 copy_options, image_paths, briefing,
-                browser, template_name, width, height, out_dir, campaign_id,
+                browser, template_file, formato, width, height, out_dir, campaign_id,
                 hide_overlay=hide_overlay, font_option=font_option, font_size=font_size,
             )
         finally:
@@ -335,7 +368,7 @@ def compose_all(
 
 def _compose_simples(
     copy_options, image_paths, briefing,
-    browser, template_name, width, height, out_dir, campaign_id,
+    browser, template_file, formato, width, height, out_dir, campaign_id,
     hide_overlay: bool = False,
     font_option: FontOption | None = None,
     font_size: str = "M",
@@ -345,7 +378,7 @@ def _compose_simples(
     for copy, image_path in zip(copy_options, image_paths):
         n = copy["option_id"]
         destino = out_dir / f"option_{n}.png"
-        html = _build_html(copy, image_path, template_name, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+        html = _build_html(copy, image_path, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
         destino.parent.mkdir(parents=True, exist_ok=True)
         _render_with_browser(browser, html, destino, width, height)
         utils.log(campaign_id, f"composer: opção {n} composta -> {destino.name}")
@@ -355,7 +388,7 @@ def _compose_simples(
 
 def _compose_carousel(
     copy_options, image_paths, briefing,
-    browser, template_name, width, height, out_dir, campaign_id,
+    browser, template_file, formato, width, height, out_dir, campaign_id,
     hide_overlay: bool = False,
     font_option: FontOption | None = None,
     font_size: str = "M",
@@ -377,7 +410,7 @@ def _compose_carousel(
                 "body": slide["body"],
                 "cta": cta,
             }
-            html = _build_html(copy_slide, image_path, template_name, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+            html = _build_html(copy_slide, image_path, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
             destino.parent.mkdir(parents=True, exist_ok=True)
             _render_with_browser(browser, html, destino, width, height)
             utils.log(campaign_id, f"composer: opção {n} slide {m} -> {destino.name}")

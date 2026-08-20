@@ -17,6 +17,7 @@ preservando as versões anteriores em copy_versions (tabela do DB).
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 from modules import store, utils
@@ -192,6 +193,8 @@ def listar() -> list[dict]:
             "font_variant": campanha.get("font_variant") or "",
             "font_size": campanha.get("font_size") or "M",
             "image_asset_id": campanha.get("image_asset_id") or "",
+            "layout": campanha.get("layout") or "",
+            "upload_filenames": json.loads(campanha["upload_filenames"]) if campanha.get("upload_filenames") else [],
         }
         resultado.append({**campanha, "briefing": briefing})
     return resultado
@@ -218,6 +221,10 @@ def read_briefing(campaign_id: str) -> dict | None:
         "font_variant": (c["font_variant"] or "") if "font_variant" in c.keys() else "",
         "font_size": (c["font_size"] or "M") if "font_size" in c.keys() else "M",
         "image_asset_id": (c["image_asset_id"] or "") if "image_asset_id" in c.keys() else "",
+        "layout": (c["layout"] or "") if "layout" in c.keys() else "",
+        "upload_filenames": (
+            json.loads(c["upload_filenames"]) if ("upload_filenames" in c.keys() and c["upload_filenames"]) else []
+        ),
     }
 
 

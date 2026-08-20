@@ -6,6 +6,7 @@ Mocka a geração assíncrona (sem APIs/threads) e o exporter.
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
 from pathlib import Path
@@ -59,6 +60,17 @@ def _seed_copy_e_composed():
         (camp / "composed" / f"option_{i}.png").write_bytes(b"PNG")
 
 
+def test_api_brand_inclui_layout_options(client):
+    resp = client.get("/api/brand")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "layout_options" in data
+    assert len(data["layout_options"]) == len(settings.brand.layout_options)
+    primeiro = data["layout_options"][0]
+    assert primeiro["id"] == settings.brand.layout_options[0].id
+    assert primeiro["preview_url"] == f"/layout-previews/{primeiro['id']}.png"
+
+
 def test_criar_campanha(client):
     resp = client.post("/api/campaigns", json=_briefing_body())
     assert resp.status_code == 201
@@ -72,6 +84,49 @@ def test_criar_briefing_invalido_400(client):
     resp = client.post("/api/campaigns", json=body)
     assert resp.status_code == 400
     assert "erro" in resp.get_json()
+
+
+def _fake_png_bytes():
+    return (io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 100), "foto.png")
+
+
+def test_criar_carrossel_com_upload_multi_foto(client):
+    body = _briefing_body()
+    body["formato"] = "carousel"
+    body["num_slides"] = "3"
+    data = {**body, "background_source": "upload"}
+    resp = client.post(
+        "/api/campaigns",
+        data={
+            **data,
+            "upload": [_fake_png_bytes(), _fake_png_bytes(), _fake_png_bytes()],
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201, resp.get_json()
+    briefing = campaign_store.read_briefing(CID)
+    assert briefing["upload_filenames"] == [
+        "upload_slide_1.png", "upload_slide_2.png", "upload_slide_3.png",
+    ]
+    for nome in briefing["upload_filenames"]:
+        assert (settings.CAMPAIGNS_DIR / CID / nome).exists()
+
+
+def test_criar_carrossel_upload_com_contagem_errada_400(client):
+    body = _briefing_body()
+    body["formato"] = "carousel"
+    body["num_slides"] = "3"
+    resp = client.post(
+        "/api/campaigns",
+        data={
+            **body,
+            "background_source": "upload",
+            "upload": [_fake_png_bytes(), _fake_png_bytes()],  # só 2, faltam 1
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    assert "3 fotos" in resp.get_json()["erro"]
 
 
 def test_listar_inclui_campanha(client):

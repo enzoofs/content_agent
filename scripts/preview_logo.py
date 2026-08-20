@@ -29,7 +29,7 @@ COPY = {
 
 for formato in ("square", "portrait"):
     w, h = settings.POST_SIZES[formato]
-    tpl = settings.TEMPLATE_BY_FORMAT[formato]
+    tpl = settings.template_path(formato, settings.DEFAULT_LAYOUT)
     out = OUT_DIR / f"preview_{formato}.png"
-    composer.compose(COPY, BG, tpl, out, w, h)
+    composer.compose(COPY, BG, tpl, formato, out, w, h)
     print(f"OK  {formato}: {out}")

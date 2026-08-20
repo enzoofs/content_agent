@@ -26,6 +26,7 @@ from modules import campaign_store, utils
 def generate(
     copy_options: list[dict], formato: str, campaign_id: str,
     upload_path: Path | None = None,
+    upload_paths: list[Path] | None = None,
 ) -> list[Path] | list[list[Path]]:
     """
     Gera as imagens de fundo das variações de copy.
@@ -36,8 +37,12 @@ def generate(
         campaign_id: id da campanha (define a pasta de saída).
         upload_path: foto enviada pelo operador. Quando setado, pula Ideogram
             inteiramente e usa essa mesma foto pras 3 opções (incluindo todos
-            os slides do carrossel). Útil pra fotos do próprio escritório /
-            equipe — quando o cliente não quer arte gerada por IA.
+            os slides do carrossel, se `upload_paths` não for usado). Útil
+            pra fotos do próprio escritório / equipe.
+        upload_paths: SÓ pra carrossel — 1 foto por slide, na ordem
+            escolhida pelo operador. A mesma lista é reaproveitada nas 3
+            opções (cada opção tem os mesmos N slides de fundo; só o texto
+            muda). Tem prioridade sobre `upload_path` quando setado.
 
     Returns:
         - square/portrait: list[Path] (uma imagem por opção)
@@ -51,7 +56,7 @@ def generate(
     size = settings.POST_SIZES[formato]
 
     if formato == "carousel":
-        return _generate_carousel(copy_options, formato, size, out_dir, campaign_id, upload_path)
+        return _generate_carousel(copy_options, formato, size, out_dir, campaign_id, upload_path, upload_paths)
 
     paths: list[Path] = []
     for copy in copy_options:
@@ -73,6 +78,7 @@ def _generate_carousel(
     out_dir: Path,
     campaign_id: str,
     upload_path: Path | None = None,
+    upload_paths: list[Path] | None = None,
 ) -> list[list[Path]]:
     """Gera N imagens por opção (uma por slide) e devolve a estrutura aninhada."""
     todas: list[list[Path]] = []
@@ -82,7 +88,13 @@ def _generate_carousel(
         for slide in copy["slides"]:
             m = slide["slide_id"]
             destino = out_dir / f"option_{n}_slide_{m}.png"
-            if upload_path is not None:
+            if upload_paths:
+                # 1 foto por slide, na ordem escolhida — reaproveitada nas 3
+                # opções. Índice cíclico defensivo: nunca quebra a campanha
+                # se a contagem não bater exatamente com num_slides.
+                foto_slide = upload_paths[(m - 1) % len(upload_paths)]
+                _usar_upload(foto_slide, destino, size, campaign_id, n, slide_id=m)
+            elif upload_path is not None:
                 _usar_upload(upload_path, destino, size, campaign_id, n, slide_id=m)
             else:
                 prompt = _build_prompt(slide["image_prompt"])

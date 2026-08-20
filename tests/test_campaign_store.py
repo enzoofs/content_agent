@@ -44,6 +44,14 @@ def test_criar_grava_estado_e_briefing():
     assert briefing["formato"] == "square"
 
 
+def test_layout_persiste_e_volta_no_briefing():
+    b = _briefing()
+    b["layout"] = "cartao"
+    cs.criar(b)
+    briefing = cs.read_briefing(CID)
+    assert briefing["layout"] == "cartao"
+
+
 def test_write_state_atualiza_campos_e_timestamp():
     cs.criar(_briefing())
     cs.write_state(CID, status="aguardando_aprovacao")

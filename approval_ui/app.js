@@ -5,6 +5,7 @@ let pollTimer = null;
 let calRef = null; // primeiro dia do mês exibido no calendário
 let BRAND = null; // metadata do brand ativo (carregado em loadBrand no boot)
 let pendingImageAsset = null; // asset escolhido em "Banco de imagens" -> "Usar em nova campanha"
+let carouselUploadFiles = []; // fotos escolhidas pro upload multi-imagem de carrossel, na ordem dos slides (reset a cada renderNovo)
 
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", async () => {
@@ -356,6 +357,7 @@ async function carregarBancoPicker() {
 function renderNovo() {
   const fields = (BRAND && BRAND.briefing_fields) || [];
   const html = renderBriefingFieldsHtml(fields);
+  carouselUploadFiles = [];
 
   // Bloco de fundo: gerar via IA, enviar foto própria, ou reaproveitar uma
   // arte do banco de imagens (B.5). Disponível pra qualquer brand — antes
@@ -372,9 +374,10 @@ function renderNovo() {
       </label>
       <label id="wrap-upload" class="hidden">Foto (PNG, JPG ou WEBP)
         <input type="file" name="upload" id="upload-input" accept="image/png,image/jpeg,image/webp">
-        <small class="form-help">A mesma foto será usada nas 3 variações.</small>
+        <small class="form-help" id="upload-help-text">A mesma foto será usada nas 3 variações.</small>
         <small class="form-help" id="upload-res-hint"></small>
         <small class="form-help form-warning hidden" id="upload-res-warning"></small>
+        <div id="carousel-upload-order" class="carousel-upload-order hidden"></div>
       </label>
       <div id="wrap-banco" class="hidden">
         <small class="form-help">Clique numa imagem pra usar como fundo.</small>
@@ -387,11 +390,14 @@ function renderNovo() {
       </label>
     </fieldset>`;
 
+  const layoutHtml = renderLayoutPickerHtml();
+
   app().innerHTML = `
     <a class="back" href="#/">← Campanhas</a>
     <h1 class="page-title">Nova campanha</h1>
     <form id="form-novo" class="form">
       ${html}
+      ${layoutHtml}
       ${uploadHtml}
       <div id="form-erro" class="form-erro hidden"></div>
       <div class="form-actions">
@@ -430,15 +436,46 @@ function renderNovo() {
   // pra o operador saber ANTES de gerar se a foto vai perder nitidez.
   const formatoSelect = document.querySelector('#form-novo [name="formato"]');
   const uploadInputEl = document.getElementById("upload-input");
+  const uploadHelpText = document.getElementById("upload-help-text");
+
+  // Carrossel: cada slide precisa da sua própria foto de fundo, na ordem em
+  // que vão aparecer no post — diferente de square/portrait/story, onde uma
+  // única foto vale pras 3 variações. Alterna o input pra multi-seleção e o
+  // texto de ajuda conforme o formato.
+  const syncUploadModoCarrossel = () => {
+    if (!uploadInputEl) return;
+    const ehCarrossel = formatoSelect && formatoSelect.value === "carousel";
+    uploadInputEl.toggleAttribute("multiple", ehCarrossel);
+    if (uploadHelpText) {
+      uploadHelpText.textContent = ehCarrossel
+        ? "Envie uma foto por slide (na ordem desejada) — dá pra reordenar depois de selecionar."
+        : "A mesma foto será usada nas 3 variações.";
+    }
+    if (!ehCarrossel) {
+      carouselUploadFiles = [];
+      renderCarouselUploadOrder();
+    }
+  };
+
   if (formatoSelect) {
     formatoSelect.addEventListener("change", () => {
       atualizarDicaResolucao(formatoSelect.value);
-      if (uploadInputEl && uploadInputEl.files[0]) validarResolucaoUpload(uploadInputEl.files[0], formatoSelect.value);
+      syncUploadModoCarrossel();
+      if (uploadInputEl && uploadInputEl.files[0] && formatoSelect.value !== "carousel") {
+        validarResolucaoUpload(uploadInputEl.files[0], formatoSelect.value);
+      }
     });
     atualizarDicaResolucao(formatoSelect.value);
+    syncUploadModoCarrossel();
   }
   if (uploadInputEl) {
     uploadInputEl.addEventListener("change", () => {
+      const ehCarrossel = formatoSelect && formatoSelect.value === "carousel";
+      if (ehCarrossel) {
+        carouselUploadFiles = Array.from(uploadInputEl.files || []);
+        renderCarouselUploadOrder();
+        return;
+      }
       const file = uploadInputEl.files[0];
       if (file) validarResolucaoUpload(file, formatoSelect ? formatoSelect.value : "square");
     });
@@ -462,6 +499,8 @@ function renderNovo() {
   if (fontSizeSelect) {
     fontSizeSelect.addEventListener("change", (e) => atualizarTamanhoPreviewFonte(e.target.value));
   }
+
+  wireLayoutPicker();
 
   document.getElementById("form-novo").addEventListener("submit", onSubmitNovo);
 }
@@ -564,6 +603,88 @@ function atualizarTamanhoPreviewFonte(fontSize) {
   if (!preview) return;
   const escala = FONT_SIZE_SCALES_PREVIEW[fontSize] || FONT_SIZE_SCALES_PREVIEW.M;
   preview.style.fontSize = `${FONT_PREVIEW_BASE_PX * escala}px`;
+}
+
+// ====================== Seletor de layout ======================
+// Grid de cards com miniaturas estáticas (BRAND.layout_options, já
+// carregado em /api/brand no boot) — o operador vê o layout ANTES de
+// gerar, sem custo de API por visualização (ver
+// scripts/generate_layout_previews.py). Mesmo padrão de interação do
+// picker do banco de imagens (carregarBancoPicker): clique seta o hidden
+// input; FormData do submit pega ele automaticamente.
+function renderLayoutPickerHtml() {
+  const options = (BRAND && BRAND.layout_options) || [];
+  if (!options.length) return "";
+  const cards = options.map((o, idx) => `
+    <div class="layout-picker-card${idx === 0 ? " selected" : ""}" data-layout-id="${escapeAttr(o.id)}" tabindex="0" role="button">
+      <img src="${o.preview_url}" alt="${escapeAttr(o.label)}" loading="lazy">
+      <strong>${escapeHtml(o.label)}</strong>
+      ${o.description ? `<small>${escapeHtml(o.description)}</small>` : ""}
+    </div>`).join("");
+  return `
+    <fieldset class="form-fieldset">
+      <legend>Layout do post</legend>
+      <div class="layout-picker">${cards}</div>
+      <input type="hidden" name="layout" id="layout-input" value="${escapeAttr(options[0].id)}">
+    </fieldset>`;
+}
+
+function wireLayoutPicker() {
+  const picker = document.querySelector("#form-novo .layout-picker");
+  const hiddenInput = document.getElementById("layout-input");
+  if (!picker || !hiddenInput) return;
+  const selecionar = (card) => {
+    picker.querySelectorAll(".layout-picker-card").forEach((c) => c.classList.remove("selected"));
+    card.classList.add("selected");
+    hiddenInput.value = card.dataset.layoutId;
+  };
+  picker.querySelectorAll(".layout-picker-card").forEach((card) => {
+    card.addEventListener("click", () => selecionar(card));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selecionar(card); }
+    });
+  });
+}
+
+// Lista reordenável de miniaturas pro upload multi-foto de carrossel — cada
+// slide usa a foto na posição correspondente da lista (1ª foto = slide 1,
+// etc). Setas sobem/descem em vez de drag-and-drop: mais rápido de
+// implementar de forma confiável e acessível via teclado.
+function renderCarouselUploadOrder() {
+  const container = document.getElementById("carousel-upload-order");
+  if (!container) return;
+  if (!carouselUploadFiles.length) {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+    return;
+  }
+  container.classList.remove("hidden");
+  container.innerHTML = `<small class="form-help">Ordem dos slides (1º = slide 1):</small>` +
+    carouselUploadFiles.map((file, idx) => `
+      <div class="carousel-upload-item">
+        <span class="carousel-upload-pos">${idx + 1}</span>
+        <img src="${URL.createObjectURL(file)}" alt="Slide ${idx + 1}">
+        <span class="carousel-upload-name">${escapeHtml(file.name)}</span>
+        <div class="carousel-upload-actions">
+          <button type="button" data-acao="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""} title="Mover pra cima">↑</button>
+          <button type="button" data-acao="down" data-idx="${idx}" ${idx === carouselUploadFiles.length - 1 ? "disabled" : ""} title="Mover pra baixo">↓</button>
+          <button type="button" data-acao="remover" data-idx="${idx}" title="Remover">✕</button>
+        </div>
+      </div>`).join("");
+
+  container.querySelectorAll("button[data-acao]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      if (btn.dataset.acao === "up" && idx > 0) {
+        [carouselUploadFiles[idx - 1], carouselUploadFiles[idx]] = [carouselUploadFiles[idx], carouselUploadFiles[idx - 1]];
+      } else if (btn.dataset.acao === "down" && idx < carouselUploadFiles.length - 1) {
+        [carouselUploadFiles[idx + 1], carouselUploadFiles[idx]] = [carouselUploadFiles[idx], carouselUploadFiles[idx + 1]];
+      } else if (btn.dataset.acao === "remover") {
+        carouselUploadFiles.splice(idx, 1);
+      }
+      renderCarouselUploadOrder();
+    });
+  });
 }
 
 // Espelha config/settings.py:POST_SIZES — mantenha em sincronia se mudar lá.
@@ -721,7 +842,21 @@ async function onSubmitNovo(e) {
       // Remove o campo background_source (uso só no front).
       fd.delete("background_source");
       const formato = fd.get("formato");
-      if (formato !== "carousel") fd.set("num_slides", "1");
+      if (formato !== "carousel") {
+        fd.set("num_slides", "1");
+      } else if (carouselUploadFiles.length) {
+        // Carrossel com upload próprio: reenvia os arquivos na ordem que o
+        // operador escolheu no reordenador (não a ordem nativa da seleção
+        // do SO), um por slide.
+        const numSlides = parseInt(fd.get("num_slides"), 10) || carouselUploadFiles.length;
+        if (carouselUploadFiles.length !== numSlides) {
+          throw new Error(
+            `Envie exatamente ${numSlides} fotos (uma por slide) — você selecionou ${carouselUploadFiles.length}.`
+          );
+        }
+        fd.delete("upload");
+        carouselUploadFiles.forEach((file) => fd.append("upload", file));
+      }
       res = await fetch("/api/campaigns", { method: "POST", body: fd });
     } else {
       const body = Object.fromEntries(fd.entries());

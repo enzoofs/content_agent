@@ -67,6 +67,21 @@ class FontOption:
 
 
 @dataclass(frozen=True)
+class LayoutOption:
+    """
+    Uma variante de LAYOUT (posição de elementos, não só tipografia)
+    selecionável pelo operador no form de nova campanha. Cada id precisa
+    ter um template correspondente em `templates/<id>/<formato>.html` pra
+    cada formato suportado — ver `settings.template_path`. Primeiro item
+    da tupla de `Brand.layout_options` é o default.
+    """
+
+    id: str            # chave enviada no briefing (ex.: "cartao")
+    label: str         # rótulo visível na UI (ex.: "Cartão central")
+    description: str = ""  # frase curta explicando o estilo, exibida no card
+
+
+@dataclass(frozen=True)
 class Brand:
     """Configuração visual e textual de um cliente (imutável)."""
 
@@ -133,6 +148,11 @@ class Brand:
     # pra seleção de fonte — composer cai pro font_files fixo (retrocompat).
     # Primeiro item da tupla é o default.
     font_options: tuple[FontOption, ...] = ()
+
+    # Variantes de LAYOUT selecionáveis (posição de headline/logo/CTA, não
+    # só tipografia). Vazio = brand ainda não migrou; composer cai pro
+    # layout fixo "gradiente" (retrocompat). Primeiro item é o default.
+    layout_options: tuple[LayoutOption, ...] = ()
     build_user_message: Callable[[dict, str], str] = field(default=lambda b, n="": "")
     build_user_message_carousel: Callable[[dict, str], str] = field(default=lambda b, n="": "")
 

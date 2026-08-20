@@ -70,14 +70,15 @@ def test_template_renderiza_dentro_dos_invariantes(formato, tmp_path):
     Cada formato deve: renderizar, ter dimensões corretas, > 30KB, navy dominante.
     """
     width, height = settings.POST_SIZES[formato]
-    template_name = settings.TEMPLATE_BY_FORMAT[formato]
+    template_file = settings.template_path(formato, settings.DEFAULT_LAYOUT)
     bg = _placeholder_bg(tmp_path, width, height)
     out = tmp_path / f"{formato}.png"
 
     composer.compose(
         copy=_copy_padrao(),
         image_path=bg,
-        template_name=template_name,
+        template_file=template_file,
+        formato=formato,
         output_path=out,
         width=width,
         height=height,

@@ -62,13 +62,25 @@ POST_SIZES = {
     "story": (1080, 1920),       # Stories Instagram (9:16, full-screen)
 }
 
-# Mapeia formato -> template HTML usado pelo composer
-TEMPLATE_BY_FORMAT = {
-    "square": "post_square.html",
-    "portrait": "post_portrait.html",
-    "carousel": "carousel_slide.html",
-    "story": "story.html",
-}
+# Layout de composição usado quando o id escolhido não existe (arquivo
+# ausente) ou o brand não define `layout_options` — retrocompat com o
+# único visual que o sistema tinha antes do seletor de layout.
+DEFAULT_LAYOUT = "gradiente"
+
+
+def template_path(formato: str, layout_id: str) -> Path:
+    """
+    Resolve o arquivo de template pra um formato + layout.
+
+    Layout de post vive em `templates/<layout_id>/<formato>.html`. Se o
+    arquivo não existir (id desconhecido/typo), cai pro DEFAULT_LAYOUT —
+    nunca quebra o pipeline por causa de uma variante inválida (mesmo
+    espírito do fallback de fonte em composer.py).
+    """
+    candidato = TEMPLATES_DIR / layout_id / f"{formato}.html"
+    if candidato.exists():
+        return candidato
+    return TEMPLATES_DIR / DEFAULT_LAYOUT / f"{formato}.html"
 
 # --------------------------------------------------------------------------
 # Identidade visual — vem do brand atual (config/brands/<slug>.py)

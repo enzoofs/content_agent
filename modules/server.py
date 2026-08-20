@@ -181,6 +181,16 @@ def _serialize_font_option(opt) -> dict:
     }
 
 
+def _serialize_layout_option(opt) -> dict:
+    """Serializa uma LayoutOption pra payload JSON da UI (preview estático, seletor de layout)."""
+    return {
+        "id": opt.id,
+        "label": opt.label,
+        "description": opt.description,
+        "preview_url": f"/layout-previews/{opt.id}.png",
+    }
+
+
 def _brand_payload() -> dict:
     """Metadata do brand ativo pra UI consumir via /api/brand."""
     b = settings.brand
@@ -192,6 +202,7 @@ def _brand_payload() -> dict:
         "logo_url": "/brand-logo",
         "briefing_fields": [_serialize_briefing_field(f) for f in _brand_briefing_fields()],
         "font_options": [_serialize_font_option(o) for o in b.font_options],
+        "layout_options": [_serialize_layout_option(o) for o in b.layout_options],
     }
 
 
@@ -372,6 +383,48 @@ def _salvar_upload(campaign_id: str, file_storage) -> str:
             f"Limite: {_UPLOAD_MAX_BYTES // 1024 // 1024} MB."
         )
     return destino.name
+
+
+def _salvar_uploads_carousel(campaign_id: str, files: list) -> list[str]:
+    """
+    Persiste N fotos (1 por slide de carrossel) em
+    campaigns/<id>/upload_slide_<i>.<ext>, na ordem recebida — a ordem em
+    `files` É a ordem final dos slides (o operador já reordenou no front).
+
+    Returns:
+        Nomes dos arquivos salvos, na mesma ordem — vai pro
+        briefing.upload_filenames.
+
+    Raises:
+        ValueError: extensão não suportada ou arquivo vazio/gigante (mensagem
+            identifica QUAL slide falhou, pra facilitar a correção).
+    """
+    import os
+    destino_dir = settings.CAMPAIGNS_DIR / campaign_id
+    destino_dir.mkdir(parents=True, exist_ok=True)
+    nomes: list[str] = []
+    for i, file_storage in enumerate(files, start=1):
+        nome_orig = file_storage.filename or ""
+        ext = os.path.splitext(nome_orig)[1].lower()
+        if ext not in _UPLOAD_EXT_PERMITIDAS:
+            raise ValueError(
+                f"Foto do slide {i}: formato não suportado ({ext or '(sem extensão)'}). "
+                f"Aceitos: {sorted(_UPLOAD_EXT_PERMITIDAS)}."
+            )
+        destino = destino_dir / f"upload_slide_{i}{ext}"
+        file_storage.save(str(destino))
+        tamanho = destino.stat().st_size
+        if tamanho == 0:
+            destino.unlink(missing_ok=True)
+            raise ValueError(f"Foto do slide {i} está vazia.")
+        if tamanho > _UPLOAD_MAX_BYTES:
+            destino.unlink(missing_ok=True)
+            raise ValueError(
+                f"Foto do slide {i} muito grande ({tamanho // 1024 // 1024} MB). "
+                f"Limite: {_UPLOAD_MAX_BYTES // 1024 // 1024} MB."
+            )
+        nomes.append(destino.name)
+    return nomes
 
 
 # --------------------------------------------------------------------------
@@ -674,6 +727,11 @@ def build_app() -> Flask:
         """Metadata do brand ativo (nome, paleta, fontes, briefing_fields)."""
         return jsonify(_brand_payload())
 
+    @app.route("/layout-previews/<path:filename>")
+    def layout_previews(filename: str):
+        """Miniaturas estáticas dos layouts (ver scripts/generate_layout_previews.py)."""
+        return send_from_directory(settings.ASSETS_DIR / "layout_previews", filename)
+
     @app.route("/fonts/<path:filename>")
     def fonts(filename: str):
         """Serve .woff2 estático pro preview ao vivo de fonte na UI (B.4)."""
@@ -691,13 +749,17 @@ def build_app() -> Flask:
     @app.route("/api/campaigns", methods=["POST"])
     def api_criar():
         # Aceita JSON (fluxo padrão) ou multipart/form-data (quando o operador
-        # envia uma foto pra usar como fundo em vez do Ideogram).
+        # envia uma foto pra usar como fundo em vez do Ideogram — ou, no
+        # carrossel, várias fotos, 1 por slide, na ordem escolhida no front).
         upload_file = None
+        upload_files_carousel = None
         if request.content_type and request.content_type.startswith("multipart/form-data"):
             body = {k: v for k, v in request.form.items()}
-            upload_file = request.files.get("upload")
-            if upload_file and not upload_file.filename:
-                upload_file = None
+            lista = [f for f in request.files.getlist("upload") if f and f.filename]
+            if len(lista) > 1:
+                upload_files_carousel = lista
+            elif lista:
+                upload_file = lista[0]
         else:
             body = request.get_json(force=True)
 
@@ -718,10 +780,25 @@ def build_app() -> Flask:
         except ValueError as e:
             return jsonify({"erro": str(e)}), 400
 
-        # 3) Salva o upload (se houver) DEPOIS do parse — agora temos o
+        # 3) Salva o(s) upload(s) (se houver) DEPOIS do parse — agora temos o
         #    campaign_id pra rotear o arquivo. Patcha o briefing antes do INSERT
-        #    pra que upload_filename seja persistido junto.
-        if upload_file:
+        #    pra que upload_filename(s) seja(m) persistido(s) junto.
+        if upload_files_carousel:
+            if briefing["formato"] != "carousel":
+                return jsonify({"erro": "Múltiplas fotos só são aceitas pra formato carrossel."}), 400
+            if len(upload_files_carousel) != briefing["num_slides"]:
+                return jsonify({
+                    "erro": (
+                        f"Envie exatamente {briefing['num_slides']} fotos (uma por slide) — "
+                        f"recebido: {len(upload_files_carousel)}."
+                    )
+                }), 400
+            try:
+                nomes = _salvar_uploads_carousel(briefing["campaign_id"], upload_files_carousel)
+            except ValueError as e:
+                return jsonify({"erro": str(e)}), 400
+            briefing["upload_filenames"] = nomes
+        elif upload_file:
             try:
                 upload_name = _salvar_upload(briefing["campaign_id"], upload_file)
             except ValueError as e:

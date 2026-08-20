@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<!-- faixa/carousel.html — Slide de carrossel 1080×1080, layout "Faixa superior". -->
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face {
+    font-family: '$font_heading_family';
+    font-style: normal;
+    font-weight: $font_heading_weight;
+    src: url('$font_heading_file') format('woff2');
+  }
+  @font-face {
+    font-family: '$font_body_family';
+    font-style: normal;
+    font-weight: 400;
+    src: url('$font_body_400_file') format('woff2');
+  }
+  @font-face {
+    font-family: '$font_body_family';
+    font-style: normal;
+    font-weight: 600;
+    src: url('$font_body_600_file') format('woff2');
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: ${width}px;
+    height: ${height}px;
+    overflow: hidden;
+    position: relative;
+    font-family: '$font_body_family', sans-serif;
+  }
+
+  .bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('$background_image');
+    background-size: cover;
+    background-position: center;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(26, 32, 56, 0.5) 0%,
+      rgba(26, 32, 56, 0) 45%
+    );
+  }
+
+  .top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 168px;
+    background: $navy;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 48px;
+  }
+
+  .top-bar .logo {
+    height: 64px;
+    width: auto;
+  }
+
+  .top-bar .subheadline {
+    font-family: '$font_body_family', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: $gold;
+    text-transform: uppercase;
+    letter-spacing: 2.2px;
+    text-align: right;
+  }
+
+  .headline-box {
+    position: absolute;
+    left: 48px;
+    right: 48px;
+    bottom: 132px;
+    background: rgba(26, 32, 56, 0.85);
+    border-left: 4px solid $gold;
+    padding: 24px 28px;
+  }
+
+  .headline {
+    font-family: '$font_heading_family', serif;
+    font-weight: $font_heading_weight;
+    font-size: ${headline_size}px;
+    line-height: 1.15;
+    color: #FFFFFF;
+    margin-bottom: 10px;
+    letter-spacing: -0.5px;
+  }
+
+  .body-text {
+    font-family: '$font_body_family', sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.55;
+    color: rgba(255,255,255,0.85);
+    max-width: 95%;
+  }
+
+  .cta {
+    position: absolute;
+    right: 48px;
+    bottom: 56px;
+    display: inline-block;
+    padding: 13px 28px;
+    background: $gold;
+    color: $navy;
+    font-family: '$font_body_family', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  $overlay_html
+  <div class="top-bar">
+    <img class="logo" src="$logo" alt="Mendes & Vaz">
+    $subheadline_html
+  </div>
+  <div class="headline-box">
+    <h1 class="headline">$headline</h1>
+    <p class="body-text">$body_text</p>
+  </div>
+  <div class="cta">$cta_text</div>
+</body>
+</html>

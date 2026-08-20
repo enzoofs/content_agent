@@ -65,6 +65,8 @@ BRIEFING_SCHEMA: dict[str, type] = {
     "font_variant": str,           # id de FontOption do brand ativo; "" = default
     "font_size": str,              # "P" | "M" | "G" (tamanho do headline)
     "image_asset_id": str,         # "" = não usa banco; id = reaproveita imagem já gerada
+    "layout": str,                 # id de LayoutOption do brand ativo; "" = default
+    "upload_filenames": list,      # carrossel multi-foto: 1 nome por slide, na ordem; [] = não usa
 }
 
 FONT_SIZES_VALIDAS = {"P", "M", "G"}
@@ -185,6 +187,21 @@ def parse(briefing_raw: dict) -> dict:
     # brand-agnóstico e não conhece as FontOption do brand ativo — a
     # resolução segura (fallback pro default) acontece no composer.
     b["font_variant"] = (b.get("font_variant") or "").strip()
+
+    # --- Layout (posição de elementos, não valida enum estrito aqui pela
+    # mesma razão do font_variant: o parser é brand-agnóstico; resolução
+    # com fallback pro default do brand acontece no composer) ---
+    b["layout"] = (b.get("layout") or "").strip()
+
+    # --- Upload multi-foto de carrossel: 1 arquivo por slide, na ordem
+    # escolhida pelo operador no front. Vazio = usa o fluxo padrão
+    # (Ideogram, banco, ou upload_filename único reaproveitado em todos os
+    # slides — ver pipeline.py). Nomes de arquivo, não valida existência
+    # aqui (isso é responsabilidade de quem salvou o upload, no server). ---
+    raw_uploads = b.get("upload_filenames") or []
+    if not isinstance(raw_uploads, list):
+        raw_uploads = []
+    b["upload_filenames"] = [str(nome).strip() for nome in raw_uploads if str(nome).strip()]
     font_size = (b.get("font_size") or "M").strip().upper()
     if font_size not in FONT_SIZES_VALIDAS:
         raise ValueError(

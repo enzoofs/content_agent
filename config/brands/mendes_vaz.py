@@ -11,7 +11,7 @@ Estes valores eram hardcoded em config/settings.py até a extração de brands
 
 from pathlib import Path
 
-from config.brands import Brand, BriefingField, FontOption
+from config.brands import Brand, BriefingField, FontOption, LayoutOption
 
 
 # --- Formatadores de user message (Fase B.3.1) ----------------------------
@@ -126,6 +126,26 @@ BRAND = Brand(
             body_family="Montserrat",
             body_400_file=_FONTS / "montserrat-400.woff2",
             body_600_file=_FONTS / "montserrat-600.woff2",
+        ),
+    ),
+
+    # Variantes de layout selecionáveis no form de nova campanha.
+    # Primeira ("gradiente") é o default — idêntica ao visual original.
+    layout_options=(
+        LayoutOption(
+            id="gradiente",
+            label="Gradiente inferior",
+            description="Foto de fundo com sombra e texto empilhado na base — o visual clássico do M&V.",
+        ),
+        LayoutOption(
+            id="cartao",
+            label="Cartão central",
+            description="Foto full-bleed com o texto num cartão sólido na parte inferior.",
+        ),
+        LayoutOption(
+            id="faixa",
+            label="Faixa superior",
+            description="Barra sólida no topo com a logo; headline em destaque sobre a foto, CTA em pill.",
         ),
     ),
 

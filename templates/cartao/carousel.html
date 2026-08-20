@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<!-- cartao/carousel.html — Slide de carrossel 1080×1080, layout "Cartão central". -->
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face {
+    font-family: '$font_heading_family';
+    font-style: normal;
+    font-weight: $font_heading_weight;
+    src: url('$font_heading_file') format('woff2');
+  }
+  @font-face {
+    font-family: '$font_body_family';
+    font-style: normal;
+    font-weight: 400;
+    src: url('$font_body_400_file') format('woff2');
+  }
+  @font-face {
+    font-family: '$font_body_family';
+    font-style: normal;
+    font-weight: 600;
+    src: url('$font_body_600_file') format('woff2');
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: ${width}px;
+    height: ${height}px;
+    overflow: hidden;
+    position: relative;
+    font-family: '$font_body_family', sans-serif;
+  }
+
+  .bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('$background_image');
+    background-size: cover;
+    background-position: center;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(26, 32, 56, 0.35) 0%,
+      rgba(26, 32, 56, 0) 28%
+    );
+  }
+
+  .logo-badge {
+    position: absolute;
+    top: 32px;
+    left: 32px;
+    height: 54px;
+    width: auto;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+  }
+
+  .card {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: $navy;
+    padding: 44px 56px 52px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .gold-rule {
+    width: 44px;
+    height: 3px;
+    background: $gold;
+    margin-bottom: 18px;
+  }
+
+  .headline {
+    font-family: '$font_heading_family', serif;
+    font-weight: $font_heading_weight;
+    font-size: ${headline_size}px;
+    line-height: 1.15;
+    color: #FFFFFF;
+    margin-bottom: 14px;
+    letter-spacing: -0.5px;
+  }
+
+  .subheadline {
+    font-family: '$font_body_family', sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: $gold;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .body-text {
+    font-family: '$font_body_family', sans-serif;
+    font-weight: 400;
+    font-size: 17px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.82);
+    margin-bottom: 24px;
+    max-width: 92%;
+  }
+
+  .cta {
+    display: inline-block;
+    padding: 12px 26px;
+    background: $gold;
+    color: $navy;
+    font-family: '$font_body_family', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    width: fit-content;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  $overlay_html
+  <img class="logo-badge" src="$logo" alt="Mendes & Vaz">
+  <div class="card">
+    <div class="gold-rule"></div>
+    <h1 class="headline">$headline</h1>
+    $subheadline_html
+    <p class="body-text">$body_text</p>
+    <div class="cta">$cta_text</div>
+  </div>
+</body>
+</html>

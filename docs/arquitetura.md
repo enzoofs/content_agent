@@ -53,7 +53,7 @@ automaticamente.
 | **Briefing** | `modules/briefing_parser.py` | Valida campos + sanitização anti-prompt-injection. | Novo campo de briefing |
 | **HTTP/UI** | `modules/server.py` | Flask + waitress + serve SPA. | Novo endpoint |
 | **SPA** | `approval_ui/` | Vanilla JS. 4 telas: dashboard, novo, progresso, aprovação. | UI nova |
-| **Templates** | `templates/*.html` | Layout dos PNGs. CSS literal + `$placeholder`. | Novo layout, ajuste visual |
+| **Templates** | `templates/<layout>/<formato>.html` | Layout dos PNGs. Um subdiretório por `LayoutOption` (`gradiente`/`cartao`/`faixa` no M&V), 4 arquivos cada (square/portrait/carousel/story). CSS literal + `$placeholder`. `settings.template_path(formato, layout_id)` resolve o arquivo, com fallback pro `DEFAULT_LAYOUT` se o id não existir. | Novo layout selecionável, ajuste visual |
 | **Scripts** | `scripts/` | One-shots: migrations, utilitários. | Apenas operações pontuais |
 
 ---
@@ -185,10 +185,11 @@ matam performance de queries.
 
 | Quero... | Mexo em... |
 |---|---|
-| Novo formato de post (ex: Stories 1080×1920) | `config/settings.py` (POST_SIZES, TEMPLATE_BY_FORMAT) + novo `templates/post_stories.html` + `briefing_parser.FORMATOS_VALIDOS` |
+| Novo formato de post (ex: Stories 1080×1920) | `config/settings.py` (POST_SIZES) + novo `templates/<layout>/<formato>.html` pra CADA layout existente + `briefing_parser.FORMATOS_VALIDOS` |
+| Novo layout selecionável (posição de elementos) | `config/brands/<slug>.py` (`layout_options`, novo `LayoutOption`) + `templates/<novo_id>/*.html` (4 arquivos, um por formato) + rodar `scripts/generate_layout_previews.py` pra gerar a miniatura |
 | Novo provedor de LLM | `config/settings.py` (`OPENAI_MODEL` → novo modelo) ou wrapper em `copy_generator.generate` |
 | Novo provedor de imagem | `modules/image_generator.py` (adapter — mantém API existente) |
-| Nova cor da paleta | `config/settings.py` (COLORS) + referência nos 3 templates |
+| Nova cor da paleta | `config/settings.py` (COLORS) + referência em todos os `templates/<layout>/*.html` |
 | Novo limite de quota | `config/settings.py` (QUOTAS) — frontend lê via `/api/quotas` |
 | Novo status | `modules/campaign_store.py` (STATES) + UI: `app.js` (statusInfo + route handling) |
 | Novo endpoint HTTP | `modules/server.py` (mantém padrão `/api/<recurso>`) |
