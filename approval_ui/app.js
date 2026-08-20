@@ -768,11 +768,12 @@ function onTemplateSelect(e) {
       const el = form.elements[f.name];
       if (el && t[f.name] !== undefined && t[f.name] !== null) {
         el.value = t[f.name];
+        // `.value =` não dispara "change" — precisa disparar manualmente pra
+        // qualquer listener acoplado ao campo rodar (ex.: formato liga/desliga
+        // multi-upload do carrossel e a visibilidade de num_slides).
+        el.dispatchEvent(new Event("change"));
       }
     }
-    // Mostra/esconde campo de slides conforme formato
-    const wrap = document.getElementById("wrap-num_slides");
-    if (wrap) wrap.classList.toggle("hidden", t.formato !== "carousel");
   });
 }
 
