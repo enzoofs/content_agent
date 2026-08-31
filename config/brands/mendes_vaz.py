@@ -154,16 +154,27 @@ BRAND = Brand(
     # Estética DELIBERADAMENTE acessível — escritório pequeno/médio BR,
     # classe média, profissional sem ser luxuoso. Texto NUNCA na imagem
     # (a copy é renderizada por código no template HTML/CSS).
+    # Ajustado em 2026-08-31: cliente reportou que os posts "têm cara de IA".
+    # Resposta em duas frentes — preferir cenas SEM pessoas (ambiente, mesa,
+    # documentos, fachada) e só usar 1 pessoa quando a cena realmente pedir
+    # presença humana, e empurrar a estética pra foto editorial real
+    # (DSLR/profundidade de campo) em vez do "brilho" típico de imagem
+    # gerada por IA. Precisa validação visual com chave Ideogram real.
     image_prompt_suffix=(
         "small to medium-sized law firm, modest professional office, "
-        "Brazilian middle-class environment, accessible, realistic, "
-        "natural lighting, "
-        "1 person (or at most 2), diverse representation, "
-        "professional but simple, not luxurious, no text"
+        "Brazilian middle-class environment, accessible, photorealistic, "
+        "shot on DSLR camera, natural window lighting, shallow depth of "
+        "field, authentic editorial photography style, candid documentary "
+        "feel, prefer empty scenes (desk with documents, office detail, "
+        "building facade, meeting room) with zero people; use at most 1 "
+        "person only when the scene truly requires human presence, diverse "
+        "representation when a person appears, professional but simple, "
+        "not luxurious, no text"
     ),
 
     # Negative prompt tira clichês jurídicos + estética luxuosa + cenas com
-    # muita gente / mãos em close (Ideogram erra essas geometrias).
+    # muita gente / mãos em close (Ideogram erra essas geometrias), e reforça
+    # contra o "brilho" plástico/genérico de imagem gerada por IA.
     ideogram_negative_prompt=(
         "text, words, letters, watermark, logo, signature, "
         "scales of justice, gavel, hammer, cartoon, illustration, "
@@ -172,7 +183,10 @@ BRAND = Brand(
         "luxurious, opulent, marble, gold leaf, palace, mansion, "
         "expensive interior, chandelier, ornate, "
         "crowd, group of people, many people, multiple hands, "
-        "close-up of hands, complex interactions, handshake closeup"
+        "close-up of hands, complex interactions, handshake closeup, "
+        "ai generated look, cgi, 3d render, plastic skin, waxy skin, "
+        "uncanny valley, airbrushed, overly smooth skin, artificial pose, "
+        "stock photo cliche, fake smile, glossy render"
     ),
 
     approved_by="Henrique Mendes",
@@ -195,7 +209,7 @@ REGRAS DE COPY:
 4. O CTA deve ser específico e de baixo atrito
 5. EVITE "AI slop": nada de frases genéricas e vazias ("nossa equipe pode ajudar", "soluções sob medida", "esteja sempre protegido"). Seja concreto — cite situações reais, consequências práticas e ganhos tangíveis. Escreva com a autoridade de quem domina o assunto, não como um anúncio genérico.
 6. Hashtags: forneça de 8 a 15. TODAS em minúsculas, SEM acentos, SEM espaços, SEM caracteres especiais e SEM erros de digitação (cada hashtag é uma palavra única ou palavras coladas, ex.: "direitomedico", "advocaciabh"). Misture três tipos: termos amplos da área, termos de nicho do tema específico, e termos locais quando fizer sentido ("belohorizonte", "bh", "minasgerais"). Nunca crie hashtags cafonas, com números promocionais ou inventadas.
-7. O image_prompt (em INGLÊS) deve descrever uma cena PROFISSIONAL, REALISTA e ACESSÍVEL — escritório pequeno ou médio, ambiente brasileiro de classe média, NUNCA luxuoso (sem mármore, palácios, lustres, ornamentos opulentos). Evite clichê jurídico (balança, martelo). Inclua NO MÁXIMO 1 ou 2 PESSOAS (idealmente 1) — diversidade obrigatória (gênero/etnia variados ao longo das opções). Evite multidões, mãos em close-up, interações complexas (apertos de mão em primeiro plano, vários braços, etc).
+7. O image_prompt (em INGLÊS) deve descrever uma cena PROFISSIONAL, REALISTA e ACESSÍVEL — escritório pequeno ou médio, ambiente brasileiro de classe média, NUNCA luxuoso (sem mármore, palácios, lustres, ornamentos opulentos), com estética de fotografia editorial real (DSLR, luz natural, profundidade de campo) — NUNCA o "brilho" artificial típico de imagem gerada por IA. Evite clichê jurídico (balança, martelo). PREFIRA cenas SEM PESSOAS (mesa com documentos, detalhe do ambiente, fachada, sala de reunião vazia) — rostos gerados por IA são o principal motivo de um post parecer artificial. Só inclua 1 pessoa (nunca mais que 1) quando a cena exigir presença humana de verdade, com diversidade entre as opções que tiverem pessoa. Evite multidões, mãos em close-up, interações complexas (apertos de mão em primeiro plano, vários braços, etc).
 
 DIFERENCIAÇÃO OBRIGATÓRIA ENTRE AS 3 OPÇÕES (não-negociável):
 - Opção 1 — POSICIONAMENTO/AUTORIDADE: tom mais institucional, aborda do ponto de vista da expertise. Headline afirma um fato técnico ou tese.
@@ -225,7 +239,7 @@ REGRAS DE CARROSSEL:
 4. EVITE "AI slop": nada de frases genéricas e vazias ("nossa equipe pode ajudar", "soluções sob medida"). Seja concreto — situações reais, consequências práticas e ganhos tangíveis.
 5. Headline de slide: até 60 chars, captura atenção em <3s. Body de slide: até 150 chars, leitura em 10s.
 6. Hashtags: 8 a 15, TODAS em minúsculas, SEM acentos, SEM espaços, SEM caracteres especiais. Misture termos amplos, de nicho e locais.
-7. image_prompt (um por slide, em INGLÊS) descreve cena PROFISSIONAL, REALISTA e ACESSÍVEL — escritório pequeno ou médio brasileiro, classe média, NUNCA luxuoso (sem mármore, palácios, ornamentos opulentos). Evite clichê jurídico. Cada slide deve ter cena diferente para variar visualmente. NO MÁXIMO 1 ou 2 PESSOAS por slide (idealmente 1) — diversidade obrigatória (gênero/etnia variados entre slides). Evite multidões, mãos em close-up, interações complexas.
+7. image_prompt (um por slide, em INGLÊS) descreve cena PROFISSIONAL, REALISTA e ACESSÍVEL — escritório pequeno ou médio brasileiro, classe média, NUNCA luxuoso (sem mármore, palácios, ornamentos opulentos), com estética de fotografia editorial real (DSLR, luz natural, profundidade de campo) — NUNCA o "brilho" artificial típico de imagem gerada por IA. Evite clichê jurídico. Cada slide deve ter cena diferente para variar visualmente. PREFIRA slides SEM PESSOAS (documentos, ambiente, detalhes) — rostos gerados por IA são o principal motivo de um post parecer artificial. Só inclua 1 pessoa (nunca mais que 1) por slide quando a cena exigir presença humana de verdade, com diversidade entre os slides que tiverem pessoa. Evite multidões, mãos em close-up, interações complexas.
 
 FORMATO DE RESPOSTA:
 Responda APENAS com um JSON válido. O JSON deve ser um objeto com a chave "options" contendo exatamente 3 objetos. Cada objeto tem:
