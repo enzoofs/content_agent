@@ -40,6 +40,21 @@ _HEADLINE_BASE_SIZE = {
 }
 _FONT_SIZE_SCALES = {"P": 0.85, "M": 1.0, "G": 1.15}
 
+# Cor da sombra (overlay) sobre a imagem de fundo — pedido do Mendes & Vaz
+# (2026-08-31): além do azul (navy_dark do brand) original, uma opção preta.
+# Os templates usam `$overlay_rgb` dentro do gradiente de `.overlay`; o
+# valor aqui é o triplet "r, g, b" já pronto pra virar `rgba($overlay_rgb, a)`.
+_OVERLAY_RGB = {
+    "azul": "26, 32, 56",   # = navy_dark (#1A2038) do brand M&V — default/legado
+    "preto": "0, 0, 0",
+}
+_OVERLAY_COLOR_DEFAULT = "azul"
+
+
+def _resolve_overlay_rgb(overlay_color: str) -> str:
+    """Resolve a cor da sombra com fallback pro azul (nunca quebra por id inválido)."""
+    return _OVERLAY_RGB.get((overlay_color or "").strip(), _OVERLAY_RGB[_OVERLAY_COLOR_DEFAULT])
+
 
 def _default_layout_option() -> LayoutOption:
     """Fallback quando o brand ativo não define `layout_options` (legado)."""
@@ -123,6 +138,7 @@ def _build_html(
     hide_overlay: bool = False,
     font_option: FontOption | None = None,
     font_size: str = "M",
+    overlay_color: str = _OVERLAY_COLOR_DEFAULT,
 ) -> str:
     """Carrega o template e substitui as variáveis com os dados do copy.
 
@@ -130,8 +146,10 @@ def _build_html(
     e `formato` só é usado pra calibrar o tamanho do headline
     (`_HEADLINE_BASE_SIZE` é por formato, não por layout).
 
-    `hide_overlay=True` remove a sombra azul (gradiente sobre o fundo) — usado
-    quando o operador envia uma foto própria e quer ela visível sem filtro.
+    `hide_overlay=True` remove a sombra (gradiente sobre o fundo) inteira —
+    usado quando o operador envia uma foto própria e quer ela visível sem
+    filtro. `overlay_color` ("azul" | "preto") escolhe a cor da sombra
+    quando ela está visível — ver `_OVERLAY_RGB`.
 
     `font_option`/`font_size` controlam a tipografia (B.4) — `font_option=None`
     cai pro fallback legado (`_default_font_option`).
@@ -162,6 +180,7 @@ def _build_html(
         "font_body_600_file": _font_data_uri(font_option.body_600_file),
         "headline_size": _resolve_headline_size(formato, font_size),
         "overlay_html": overlay_html,
+        "overlay_rgb": _resolve_overlay_rgb(overlay_color),
         "headline": escape(copy["headline"]),
         "subheadline_html": subhead_html,
         "body_text": escape(copy["body"]),
@@ -275,6 +294,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
     campaign_id = briefing["campaign_id"]
     formato = briefing["formato"]
     hide_overlay = bool(briefing.get("hide_overlay") or 0)
+    overlay_color = briefing.get("overlay_color") or _OVERLAY_COLOR_DEFAULT
     font_option = _resolve_font_option(briefing)
     font_size = briefing.get("font_size") or "M"
     layout_option = _resolve_layout_option(briefing)
@@ -302,7 +322,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
                         "body": slide["body"],
                         "cta": cta,
                     }
-                    html = _build_html(copy_slide, img, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+                    html = _build_html(copy_slide, img, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size, overlay_color=overlay_color)  # noqa: E501
                     _render_with_browser(browser, html, destino, width, height)
                     paths.append(destino)
             else:
@@ -310,7 +330,7 @@ def recompose_option(briefing: dict, copy_option: dict) -> list[Path]:
                 if not img.exists():
                     raise FileNotFoundError(f"Imagem de fundo ausente: {img}")
                 destino = out_dir / f"option_{n}.png"
-                html = _build_html(copy_option, img, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+                html = _build_html(copy_option, img, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size, overlay_color=overlay_color)  # noqa: E501
                 _render_with_browser(browser, html, destino, width, height)
                 paths.append(destino)
         finally:
@@ -341,6 +361,7 @@ def compose_all(
     campaign_id = briefing["campaign_id"]
     formato = briefing["formato"]
     hide_overlay = bool(briefing.get("hide_overlay") or 0)
+    overlay_color = briefing.get("overlay_color") or _OVERLAY_COLOR_DEFAULT
     font_option = _resolve_font_option(briefing)
     font_size = briefing.get("font_size") or "M"
     layout_option = _resolve_layout_option(briefing)
@@ -355,12 +376,12 @@ def compose_all(
                 return _compose_carousel(
                     copy_options, image_paths, briefing,
                     browser, template_file, formato, width, height, out_dir, campaign_id,
-                    hide_overlay=hide_overlay, font_option=font_option, font_size=font_size,
+                    hide_overlay=hide_overlay, font_option=font_option, font_size=font_size, overlay_color=overlay_color,
                 )
             return _compose_simples(
                 copy_options, image_paths, briefing,
                 browser, template_file, formato, width, height, out_dir, campaign_id,
-                hide_overlay=hide_overlay, font_option=font_option, font_size=font_size,
+                hide_overlay=hide_overlay, font_option=font_option, font_size=font_size, overlay_color=overlay_color,
             )
         finally:
             browser.close()
@@ -372,13 +393,14 @@ def _compose_simples(
     hide_overlay: bool = False,
     font_option: FontOption | None = None,
     font_size: str = "M",
+    overlay_color: str = _OVERLAY_COLOR_DEFAULT,
 ) -> list[Path]:
     """square/portrait: 1 PNG por opção."""
     composed: list[Path] = []
     for copy, image_path in zip(copy_options, image_paths):
         n = copy["option_id"]
         destino = out_dir / f"option_{n}.png"
-        html = _build_html(copy, image_path, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+        html = _build_html(copy, image_path, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size, overlay_color=overlay_color)  # noqa: E501
         destino.parent.mkdir(parents=True, exist_ok=True)
         _render_with_browser(browser, html, destino, width, height)
         utils.log(campaign_id, f"composer: opção {n} composta -> {destino.name}")
@@ -392,6 +414,7 @@ def _compose_carousel(
     hide_overlay: bool = False,
     font_option: FontOption | None = None,
     font_size: str = "M",
+    overlay_color: str = _OVERLAY_COLOR_DEFAULT,
 ) -> list[list[Path]]:
     """carrossel: N PNGs por opção. Cada slide vira um post com headline/body
     próprios; caption/cta/hashtags (no nível da opção) ficam no metadado."""
@@ -410,7 +433,7 @@ def _compose_carousel(
                 "body": slide["body"],
                 "cta": cta,
             }
-            html = _build_html(copy_slide, image_path, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size)  # noqa: E501
+            html = _build_html(copy_slide, image_path, template_file, formato, width, height, hide_overlay=hide_overlay, font_option=font_option, font_size=font_size, overlay_color=overlay_color)  # noqa: E501
             destino.parent.mkdir(parents=True, exist_ok=True)
             _render_with_browser(browser, html, destino, width, height)
             utils.log(campaign_id, f"composer: opção {n} slide {m} -> {destino.name}")

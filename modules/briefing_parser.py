@@ -61,6 +61,7 @@ BRIEFING_SCHEMA: dict[str, type] = {
     "num_slides": int,             # 1 para simples; 3-8 para carrossel
     "referencias": str,            # pode ser ""
     "hide_overlay": int,           # 0 = mostrar sombra (default); 1 = esconder
+    "overlay_color": str,          # "azul" (default) | "preto" — cor da sombra quando visível
     "upload_filename": str,        # "" = gerar via IA; nome de arquivo = usar foto enviada
     "font_variant": str,           # id de FontOption do brand ativo; "" = default
     "font_size": str,              # "P" | "M" | "G" (tamanho do headline)
@@ -74,6 +75,7 @@ FONT_SIZES_VALIDAS = {"P", "M", "G"}
 TONS_VALIDOS = {"tecnico", "acessivel"}
 OBJETIVOS_VALIDOS = {"awareness", "captacao", "posicionamento"}
 FORMATOS_VALIDOS = {"square", "portrait", "carousel", "story"}
+OVERLAY_COLORS_VALIDAS = {"azul", "preto"}
 
 # Limite de caracteres por campo livre — evita custo/erro com texto gigante no
 # prompt da OpenAI e protege a UI de payloads absurdos.
@@ -176,6 +178,18 @@ def parse(briefing_raw: dict) -> dict:
         b["hide_overlay"] = 1 if raw_overlay.strip().lower() in ("1", "true", "yes", "on") else 0
     else:
         b["hide_overlay"] = 1 if int(bool(raw_overlay)) else 0
+
+    # Cor da sombra quando ela está visível (hide_overlay=0). Enum fechado —
+    # diferente de font_variant/layout, não é uma lista curada por brand, é
+    # uma escolha fixa do sistema (ver composer._OVERLAY_RGB).
+    overlay_color = (b.get("overlay_color") or "azul").strip().lower()
+    if overlay_color not in OVERLAY_COLORS_VALIDAS:
+        raise ValueError(
+            f"Campo 'overlay_color' deve ser um de {sorted(OVERLAY_COLORS_VALIDAS)}; "
+            f"recebido: {overlay_color!r}."
+        )
+    b["overlay_color"] = overlay_color
+
     b["upload_filename"] = (b.get("upload_filename") or "").strip()
     # image_asset_id (B.5): sem validação de enum aqui — resolvido no pipeline
     # (pipeline.image_bank.resolver_path), que já cai pro fluxo normal de

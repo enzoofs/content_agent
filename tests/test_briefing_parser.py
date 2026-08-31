@@ -157,3 +157,32 @@ def test_upload_filenames_ignora_valor_nao_lista():
     b["upload_filenames"] = "nao_eh_lista.png"
     out = bp.parse(b)
     assert out["upload_filenames"] == []
+
+
+# --------------------------------------------------------------------------
+# Cor da sombra (overlay_color)
+# --------------------------------------------------------------------------
+def test_overlay_color_default_azul_quando_ausente():
+    out = bp.parse(_briefing_minimo())
+    assert out["overlay_color"] == "azul"
+
+
+def test_overlay_color_aceita_preto():
+    b = _briefing_minimo()
+    b["overlay_color"] = "preto"
+    out = bp.parse(b)
+    assert out["overlay_color"] == "preto"
+
+
+def test_overlay_color_normaliza_maiusculo():
+    b = _briefing_minimo()
+    b["overlay_color"] = "PRETO"
+    out = bp.parse(b)
+    assert out["overlay_color"] == "preto"
+
+
+def test_overlay_color_rejeita_valor_invalido():
+    b = _briefing_minimo()
+    b["overlay_color"] = "verde"
+    with pytest.raises(ValueError, match="overlay_color"):
+        bp.parse(b)

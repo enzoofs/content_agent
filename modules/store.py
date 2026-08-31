@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     atualizado_em         TEXT    NOT NULL,
     tokens_used           INTEGER NOT NULL DEFAULT 0,
     hide_overlay          INTEGER NOT NULL DEFAULT 0,
+    overlay_color         TEXT    NOT NULL DEFAULT 'azul',
     upload_filename       TEXT,
     font_variant          TEXT,
     font_size             TEXT    NOT NULL DEFAULT 'M',
@@ -122,7 +123,7 @@ CAMPAIGN_COLUMNS = (
     "tema_especifico", "formato", "num_slides", "referencias", "created_at",
     "status", "etapa", "copy_version", "option_aprovada", "data_agendada",
     "erro", "atualizado_em", "tokens_used",
-    "hide_overlay", "upload_filename", "font_variant", "font_size", "image_asset_id",
+    "hide_overlay", "overlay_color", "upload_filename", "font_variant", "font_size", "image_asset_id",
     "layout", "upload_filenames",
 )
 
@@ -190,6 +191,10 @@ def init_db() -> None:
             con.execute(
                 "ALTER TABLE campaigns ADD COLUMN upload_filenames TEXT"
             )
+        if "overlay_color" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN overlay_color TEXT NOT NULL DEFAULT 'azul'"
+            )
 
 
 # Alias retrocompat com nomes legados
@@ -240,6 +245,7 @@ def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy"
         "atualizado_em": agora,
         "tokens_used": 0,
         "hide_overlay": int(briefing.get("hide_overlay") or 0),
+        "overlay_color": briefing.get("overlay_color") or "azul",
         "upload_filename": briefing.get("upload_filename") or None,
         "font_variant": briefing.get("font_variant") or None,
         "font_size": briefing.get("font_size") or "M",
@@ -447,6 +453,7 @@ def migrate_from_files() -> dict:
             "atualizado_em": state.get("atualizado_em", agora),
             "tokens_used": int(state.get("tokens_used", 0) or 0),
             "hide_overlay": int(state.get("hide_overlay", 0) or 0),
+            "overlay_color": state.get("overlay_color") or "azul",
             "upload_filename": state.get("upload_filename") or None,
             "font_variant": state.get("font_variant") or None,
             "font_size": state.get("font_size") or "M",

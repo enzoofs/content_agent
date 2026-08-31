@@ -385,8 +385,14 @@ function renderNovo() {
         <input type="hidden" name="image_asset_id" id="image-asset-id-input">
       </div>
       <label>
-        <input type="checkbox" name="hide_overlay" value="1">
-        Esconder a sombra azul sobre a imagem
+        <input type="checkbox" name="hide_overlay" id="hide-overlay-input" value="1">
+        Esconder a sombra sobre a imagem
+      </label>
+      <label id="wrap-overlay-color">Cor da sombra
+        <select name="overlay_color" id="overlay-color-input">
+          <option value="azul" selected>Azul (padrão)</option>
+          <option value="preto">Preta</option>
+        </select>
       </label>
     </fieldset>`;
 
@@ -429,6 +435,19 @@ function renderNovo() {
     };
     bgSrc.addEventListener("change", syncOrigem);
     syncOrigem();
+  }
+
+  // Cor da sombra só faz sentido se a sombra estiver visível — some junto
+  // com "Esconder a sombra" marcado (pedido Mendes & Vaz 2026-08-31: além
+  // do azul original, opção preta).
+  const hideOverlayInput = document.getElementById("hide-overlay-input");
+  const wrapOverlayColor = document.getElementById("wrap-overlay-color");
+  if (hideOverlayInput && wrapOverlayColor) {
+    const syncOverlayColor = () => {
+      wrapOverlayColor.classList.toggle("hidden", hideOverlayInput.checked);
+    };
+    hideOverlayInput.addEventListener("change", syncOverlayColor);
+    syncOverlayColor();
   }
 
   // Aviso de resolução ideal (espelha settings.POST_SIZES) — atualiza a dica

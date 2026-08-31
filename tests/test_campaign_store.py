@@ -52,6 +52,20 @@ def test_layout_persiste_e_volta_no_briefing():
     assert briefing["layout"] == "cartao"
 
 
+def test_overlay_color_persiste_e_volta_no_briefing():
+    b = _briefing()
+    b["overlay_color"] = "preto"
+    cs.criar(b)
+    briefing = cs.read_briefing(CID)
+    assert briefing["overlay_color"] == "preto"
+
+
+def test_overlay_color_default_azul_quando_ausente_do_briefing():
+    cs.criar(_briefing())
+    briefing = cs.read_briefing(CID)
+    assert briefing["overlay_color"] == "azul"
+
+
 def test_write_state_atualiza_campos_e_timestamp():
     cs.criar(_briefing())
     cs.write_state(CID, status="aguardando_aprovacao")
