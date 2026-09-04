@@ -52,3 +52,11 @@ desktop.ini
 # Backups locais (snapshots manuais de state.db + campaigns + exports)
 .backup_demo_*/
 .backup_*/
+
+# Backups locais de runtime (thread daemon de modules/backup.py + publish_scheduler)
+backups/
+
+# Scratch/backup manual dentro de .claude — já vazou pro git 1x
+# (.claude/wip_backup/, removido em 2026-09-04). Nunca deveria ser commitado.
+.claude/wip_backup/
+.claude/*backup*/

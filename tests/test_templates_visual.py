@@ -17,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageStat
 
 from config import settings
 from modules import composer
@@ -51,12 +51,25 @@ def _placeholder_bg(tmp_path: Path, width: int, height: int) -> Path:
 
 
 def _cor_dominante(png_path: Path) -> tuple[int, int, int]:
-    """Retorna a cor mais frequente do PNG (downsample 1px da imagem reduzida)."""
+    """
+    Cor média da faixa inferior do PNG (últimos 15% da altura).
+
+    Por que média de uma faixa, e não "pixel mais frequente" da imagem
+    inteira: o overlay é um GRADIENTE suave sobre um fundo liso no teste
+    (_placeholder_bg) — cada linha do gradiente vira uma cor quase única,
+    então "mais frequente" empata entre dezenas de cores (uma por linha) e
+    o desempate depende de detalhe de implementação do Pillow/versão do
+    Chromium, não da cor real da imagem (comprovado: mesma imagem, mesmo
+    overlay aplicado corretamente, "mais frequente" mudava entre runs).
+    A faixa inferior é o ponto em que TODOS os templates convergem pro
+    overlay mais opaco (~0.93-0.96) — é o invariante real que queremos
+    testar ("o overlay escureceu o fundo"), não uma estatística frágil.
+    """
     img = Image.open(png_path).convert("RGB")
-    # Reduz pra 64x64 e pega o pixel mais frequente
-    img_small = img.resize((64, 64), Image.Resampling.LANCZOS)
-    pixels = img_small.getcolors(maxcolors=64 * 64)
-    return max(pixels, key=lambda x: x[0])[1]
+    w, h = img.size
+    faixa = img.crop((0, round(h * 0.85), w, h))
+    media = ImageStat.Stat(faixa).mean  # [r, g, b], já é a média por canal
+    return tuple(round(c) for c in media)
 
 
 def _proximo_de(cor_a: tuple[int, int, int], cor_b: tuple[int, int, int], tol: int = 30) -> bool:

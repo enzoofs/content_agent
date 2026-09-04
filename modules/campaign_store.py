@@ -27,21 +27,6 @@ ETAPAS = {"copy", "arte", "composicao"}
 
 
 # --------------------------------------------------------------------------
-# Helpers de path (mantidos para compatibilidade com chamadas legadas/tests)
-# --------------------------------------------------------------------------
-def state_path(campaign_id: str):
-    """DEPRECATED — mantido só para testes legados. SQLite não usa arquivo de estado."""
-    from config import settings
-    return settings.CAMPAIGNS_DIR / campaign_id / "state.json"
-
-
-def copy_path(campaign_id: str, versao: int):
-    """DEPRECATED — copy agora vive em copy_versions (DB). Mantido p/ testes legados."""
-    from config import settings
-    return settings.CAMPAIGNS_DIR / campaign_id / f"copy_v{versao}.json"
-
-
-# --------------------------------------------------------------------------
 # Leitura/escrita de estado (interface antiga preservada)
 # --------------------------------------------------------------------------
 def read_state(campaign_id: str) -> dict | None:
