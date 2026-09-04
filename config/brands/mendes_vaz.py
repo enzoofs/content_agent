@@ -9,6 +9,7 @@ Estes valores eram hardcoded em config/settings.py até a extração de brands
 (Fase B.1).
 """
 
+import os
 from pathlib import Path
 
 from config.brands import Brand, BriefingField, FontOption, LayoutOption
@@ -148,6 +149,11 @@ BRAND = Brand(
             description="Barra sólida no topo com a logo; headline em destaque sobre a foto, CTA em pill.",
         ),
     ),
+
+    # Ainda não conectado no Blotato — fica vazio até o Instagram do M&V
+    # ser autorizado lá (ver modules/publisher.py e docs sobre publicação
+    # automática, item 2026-09).
+    blotato_account_id=os.getenv("BLOTATO_ACCOUNT_ID_MENDES_VAZ", ""),
 
     logo_path=_ASSETS / "logo_mendes_vaz.png",
 

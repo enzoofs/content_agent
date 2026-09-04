@@ -153,6 +153,13 @@ class Brand:
     # só tipografia). Vazio = brand ainda não migrou; composer cai pro
     # layout fixo "gradiente" (retrocompat). Primeiro item é o default.
     layout_options: tuple[LayoutOption, ...] = ()
+
+    # ID da conta Instagram deste brand no Blotato (ver modules/publisher.py).
+    # "" = ainda não conectada — publish_scheduler pula a campanha e loga
+    # aviso em vez de quebrar (mesmo espírito defensivo do resto do projeto).
+    # Descobre-se com BlotatoPublisher().list_accounts() depois de conectar
+    # o Instagram no painel do Blotato.
+    blotato_account_id: str = ""
     build_user_message: Callable[[dict, str], str] = field(default=lambda b, n="": "")
     build_user_message_carousel: Callable[[dict, str], str] = field(default=lambda b, n="": "")
 

@@ -126,6 +126,28 @@ def marcar_aprovada(campaign_id: str, option_id: int, data_agendada: str | None 
     )
 
 
+def marcar_publicada(campaign_id: str) -> None:
+    """Marca a campanha como publicada (via publisher.py) — não publica de novo."""
+    from datetime import datetime
+    agora = datetime.now().isoformat(timespec="seconds")
+    write_state(campaign_id, publicado_em=agora, publish_erro=None)
+
+
+def registrar_erro_publicacao(campaign_id: str, mensagem: str) -> None:
+    """
+    Registra falha na publicação automática — NÃO marca como publicada, pra
+    o scheduler tentar de novo no próximo ciclo (nem toca em `status`: a
+    campanha continua "aprovada", só a publicação em si falhou).
+    """
+    write_state(campaign_id, publish_erro=mensagem)
+
+
+def listar_pendentes_publicacao() -> list[dict]:
+    """Campanhas aprovadas, na data ou atrasadas, ainda não publicadas."""
+    hoje = date.today().isoformat()
+    return store.list_pendentes_publicacao(hoje)
+
+
 def agendar(campaign_id: str, data_str: str) -> None:
     """
     Registra a data de agendamento (formato ISO YYYY-MM-DD).

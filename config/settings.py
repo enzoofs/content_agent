@@ -149,6 +149,20 @@ IDEOGRAM_RESOLUTIONS = {
 IMAGE_PROMPT_SUFFIX = brand.image_prompt_suffix
 
 # --------------------------------------------------------------------------
+# Publicação automática — Blotato (2026-09)
+# --------------------------------------------------------------------------
+# Sem chave: publish_scheduler não publica nada, só loga e segue (não é
+# fatal como OPENAI_API_KEY — publicação automática é opcional, o fluxo
+# manual de export continua funcionando sem isso).
+BLOTATO_API_KEY = os.getenv("BLOTATO_API_KEY")
+
+# URL pública onde este servidor é alcançável de fora — a Blotato precisa
+# buscar o PNG exportado por essa URL antes de publicar. Em produção é o
+# domínio do Fly.io; em dev local (sem URL pública real) publicação
+# automática simplesmente não tem como funcionar fim-a-fim.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:5000")
+
+# --------------------------------------------------------------------------
 # Servidor de aprovação (Flask local)
 # --------------------------------------------------------------------------
 # Em produção (Fly.io / Docker) precisa escutar em 0.0.0.0 pra ser roteável

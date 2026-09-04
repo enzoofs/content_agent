@@ -19,7 +19,7 @@ import pathlib
 import sys
 
 from config import settings
-from modules import backup, briefing_parser, campaign_store, pipeline, server, store, utils
+from modules import backup, briefing_parser, campaign_store, pipeline, publish_scheduler, server, store, utils
 
 
 # --------------------------------------------------------------------------
@@ -224,6 +224,7 @@ def main() -> None:
         _setup_db()
         _recover_orphan_campaigns()
         backup.start_background_scheduler()
+        publish_scheduler.start_background_scheduler()
         server.serve()
         return
 

@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
     font_size             TEXT    NOT NULL DEFAULT 'M',
     image_asset_id        TEXT,
     layout                TEXT,
-    upload_filenames      TEXT
+    upload_filenames      TEXT,
+    publicado_em          TEXT,
+    publish_erro          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS copy_versions (
@@ -124,7 +126,7 @@ CAMPAIGN_COLUMNS = (
     "status", "etapa", "copy_version", "option_aprovada", "data_agendada",
     "erro", "atualizado_em", "tokens_used",
     "hide_overlay", "overlay_color", "upload_filename", "font_variant", "font_size", "image_asset_id",
-    "layout", "upload_filenames",
+    "layout", "upload_filenames", "publicado_em", "publish_erro",
 )
 
 
@@ -195,6 +197,14 @@ def init_db() -> None:
             con.execute(
                 "ALTER TABLE campaigns ADD COLUMN overlay_color TEXT NOT NULL DEFAULT 'azul'"
             )
+        if "publicado_em" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN publicado_em TEXT"
+            )
+        if "publish_erro" not in cols:
+            con.execute(
+                "ALTER TABLE campaigns ADD COLUMN publish_erro TEXT"
+            )
 
 
 # Alias retrocompat com nomes legados
@@ -255,6 +265,8 @@ def insert_campaign(briefing: dict, status: str = "gerando", etapa: str = "copy"
             json.dumps(briefing["upload_filenames"], ensure_ascii=False)
             if briefing.get("upload_filenames") else None
         ),
+        "publicado_em": None,
+        "publish_erro": None,
     }
     cols = ", ".join(CAMPAIGN_COLUMNS)
     placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
@@ -330,6 +342,26 @@ def list_campaigns() -> list[dict]:
     with connect() as con:
         rows = con.execute(
             "SELECT * FROM campaigns ORDER BY created_at DESC, campaign_id DESC"
+        ).fetchall()
+    return [_row_to_state(r) for r in rows]
+
+
+def list_pendentes_publicacao(hoje: str) -> list[dict]:
+    """
+    Campanhas aprovadas, com data_agendada <= hoje, ainda não publicadas.
+
+    Usado pelo `modules.publish_scheduler` — roda periodicamente e busca o
+    que está "no prazo" de ir ao ar. `hoje` no formato ISO (YYYY-MM-DD),
+    passado de fora pra manter esta função testável sem depender do
+    relógio real.
+    """
+    with connect() as con:
+        rows = con.execute(
+            "SELECT * FROM campaigns WHERE status = 'aprovada' "
+            "AND publicado_em IS NULL "
+            "AND data_agendada IS NOT NULL AND data_agendada <= ? "
+            "ORDER BY data_agendada ASC",
+            (hoje,),
         ).fetchall()
     return [_row_to_state(r) for r in rows]
 
@@ -463,6 +495,8 @@ def migrate_from_files() -> dict:
                 json.dumps(state["upload_filenames"], ensure_ascii=False)
                 if state.get("upload_filenames") else None
             ),
+            "publicado_em": state.get("publicado_em") or None,
+            "publish_erro": state.get("publish_erro") or None,
         }
         cols = ", ".join(CAMPAIGN_COLUMNS)
         placeholders = ", ".join(f":{c}" for c in CAMPAIGN_COLUMNS)
