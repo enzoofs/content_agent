@@ -103,7 +103,7 @@ async function renderDashboard() {
 
 function dashCard(c) {
   const b = c.briefing || {};
-  const info = statusInfo(c.status);
+  const info = statusInfo(c);
   const card = el("a", "dash-card");
   card.href = `#/campanha/${encodeURIComponent(c.campaign_id)}`;
 
@@ -213,8 +213,9 @@ function historicoCard(c) {
   const b = c.briefing || {};
   const tema = b.tema_especifico || b.area_direito || c.campaign_id;
   const card = el("div", "dash-card");
+  const info = statusInfo(c);
 
-  card.appendChild(textEl("div", "badge badge-approved", "Aprovada"));
+  card.appendChild(textEl("div", `badge ${info.cls}`, info.label));
   card.appendChild(textEl("h3", "dash-card-title", tema));
   const meta = [b.area_direito, b.formato].filter(Boolean).join(" · ");
   card.appendChild(textEl("p", "dash-card-meta", meta));
@@ -233,8 +234,36 @@ function historicoCard(c) {
   dlBtn.setAttribute("download", "");
   actions.appendChild(dlBtn);
 
+  // Fallback manual pra quando a publicação automática (Blotato) ainda não
+  // está conectada, ou pra post feito fora do sistema (story, anúncio...).
+  // Ver docs/plans/2026-05-23-status-postagem-e-kanban.md, Fase A.
+  if (!c.publicado_em) {
+    const pubBtn = textEl("button", "btn btn-adjust", "Marquei como publicado");
+    pubBtn.type = "button";
+    pubBtn.addEventListener("click", () => marcarPublicado(c.campaign_id));
+    actions.appendChild(pubBtn);
+  }
+
   card.appendChild(actions);
   return card;
+}
+
+async function marcarPublicado(campaignId) {
+  try {
+    const res = await fetch(`/api/campaigns/${encodeURIComponent(campaignId)}/marcar-publicado`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.erro || `Erro ao marcar como publicada (HTTP ${res.status}).`);
+      return;
+    }
+    renderHistorico();
+  } catch (e) {
+    alert(`Falha ao marcar como publicada: ${e.message}`);
+  }
 }
 
 // ====================== Banco de imagens (B.5) ======================
@@ -1324,7 +1353,14 @@ async function renderCalendario() {
     const iso = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
     (porDia[iso] || []).forEach((c) => {
       const b = c.briefing || {};
-      const chip = textEl("a", "cal-chip", b.tema_especifico || b.area_direito || "Campanha");
+      // Chip navy é a assinatura visual do calendário — atraso muda o
+      // ENTORNO (borda + ícone), não a cor do chip em si. Ver
+      // docs/plans/2026-05-23-status-postagem-e-kanban.md.
+      const info = statusInfo(c);
+      let rotulo = b.tema_especifico || b.area_direito || "Campanha";
+      if (info.cls === "badge-late") rotulo = `⚠ ${rotulo}`;
+      else if (info.cls === "badge-published") rotulo = `✓ ${rotulo}`;
+      const chip = textEl("a", `cal-chip${info.cls === "badge-late" ? " cal-chip-atrasada" : ""}`, rotulo);
       chip.href = `#/campanha/${encodeURIComponent(c.campaign_id)}`;
       cell.appendChild(chip);
     });
@@ -1358,12 +1394,21 @@ async function copyLegenda(op, btn) {
 }
 
 // ====================== Helpers ======================
-function statusInfo(status) {
-  switch (status) {
-    case "aprovada": return { label: "Aprovada", cls: "badge-approved" };
+// Status de exibição DERIVADO — não é o `status` bruto do backend (esse é
+// só o workflow do pipeline). Publicação tem ciclo de vida próprio
+// (status + data_agendada + publicado_em), ver
+// docs/plans/2026-05-23-status-postagem-e-kanban.md.
+function statusInfo(c) {
+  switch (c.status) {
     case "erro": return { label: "Erro", cls: "badge-error" };
     case "gerando": return { label: "Gerando…", cls: "badge-pending" };
     case "ajuste_solicitado": return { label: "Regerando…", cls: "badge-pending" };
+    case "aprovada": {
+      if (c.publicado_em) return { label: "Publicada ✓", cls: "badge-published" };
+      const hoje = new Date().toISOString().slice(0, 10);
+      if (c.data_agendada && c.data_agendada < hoje) return { label: "Atrasada ⚠", cls: "badge-late" };
+      return { label: "Agendada", cls: "badge-approved" };
+    }
     default: return { label: "Aguardando aprovação", cls: "badge-pending" };
   }
 }

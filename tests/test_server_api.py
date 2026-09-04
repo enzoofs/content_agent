@@ -170,6 +170,44 @@ def test_approve_exporta_e_marca(client, monkeypatch):
     assert estado["data_agendada"] == "2099-12-31"
 
 
+def test_marcar_publicado_marca_e_registra_audit(client, monkeypatch):
+    client.post("/api/campaigns", json=_briefing_body())
+    _seed_copy_e_composed()
+    campaign_store.marcar_aguardando(CID)
+    monkeypatch.setattr(
+        server.exporter, "export_approved",
+        lambda cid, oid: {
+            "png": Path("fake.png"), "metadata": Path("fake.json"),
+            "post_txt": Path("fake.txt"), "all_pngs": [Path("fake.png")],
+        },
+    )
+    client.post(f"/api/campaigns/{CID}/approve", json={"option_id": 1, "data_agendada": "2099-12-31"})
+
+    eventos = []
+    monkeypatch.setattr(
+        server.exporter, "registrar_publicacao_manual",
+        lambda cid, publicado_em: eventos.append((cid, publicado_em)),
+    )
+
+    resp = client.post(f"/api/campaigns/{CID}/marcar-publicado", json={})
+    assert resp.status_code == 200
+    assert resp.get_json()["status"] == "publicada"
+    estado = campaign_store.read_state(CID)
+    assert estado["publicado_em"] is not None
+    assert len(eventos) == 1 and eventos[0][0] == CID
+
+
+def test_marcar_publicado_recusa_campanha_nao_aprovada(client):
+    client.post("/api/campaigns", json=_briefing_body())
+    resp = client.post(f"/api/campaigns/{CID}/marcar-publicado", json={})
+    assert resp.status_code == 409
+
+
+def test_marcar_publicado_404_campanha_inexistente(client):
+    resp = client.post("/api/campaigns/nao-existe/marcar-publicado", json={})
+    assert resp.status_code == 404
+
+
 def test_approve_data_passada_400(client, monkeypatch):
     client.post("/api/campaigns", json=_briefing_body())
     _seed_copy_e_composed()

@@ -845,6 +845,30 @@ def build_app() -> Flask:
             "export_all_pngs": [str(p) for p in export["all_pngs"]],
         })
 
+    @app.route("/api/campaigns/<cid>/marcar-publicado", methods=["POST"])
+    def api_marcar_publicado(cid: str):
+        """
+        Marca manualmente uma campanha aprovada como publicada.
+
+        Fallback pra quando a publicação automática (Blotato) ainda não
+        está conectada, ou pra conteúdo postado fora do sistema (story,
+        anúncio, etc.) — ver docs/plans/2026-05-23-status-postagem-e-kanban.md,
+        Fase A. Idempotente: chamar de novo só atualiza o timestamp.
+        """
+        estado = campaign_store.read_state(cid)
+        if estado is None:
+            return jsonify({"erro": f"Campanha {cid} não encontrada."}), 404
+        if estado.get("status") != "aprovada":
+            return jsonify({"erro": "Só dá pra marcar como publicada uma campanha aprovada."}), 409
+
+        from datetime import datetime
+        body = request.get_json(silent=True) or {}
+        publicado_em = body.get("publicado_em") or datetime.now().isoformat(timespec="seconds")
+        campaign_store.marcar_publicada(cid, publicado_em)
+        exporter.registrar_publicacao_manual(cid, publicado_em)
+        utils.log(cid, f"server: marcada como publicada manualmente (publicado_em={publicado_em}).")
+        return jsonify({"status": "publicada", "campaign_id": cid, "publicado_em": publicado_em})
+
     @app.route("/api/campaigns/<cid>/download", methods=["GET"])
     def api_download(cid: str):
         """

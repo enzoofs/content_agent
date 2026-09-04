@@ -88,6 +88,21 @@ def _format_post_text(copy: dict, formato: str) -> str:
     return "\n".join(linhas) + "\n"
 
 
+def registrar_publicacao_manual(campaign_id: str, publicado_em: str) -> None:
+    """
+    Evento de audit pra publicação marcada manualmente (botão "Marquei como
+    publicado" — ver docs/plans/2026-05-23-status-postagem-e-kanban.md).
+    Publicação automática (Blotato) tem seu próprio log via `utils.log` no
+    publish_scheduler; isto é só pro caminho manual, que é o que a doc de
+    design original pedia no audit trail.
+    """
+    _append_audit({
+        "evento": "publicado_manual",
+        "campaign_id": campaign_id,
+        "publicado_em": publicado_em,
+    })
+
+
 def _campaign_export_dir(campaign_id: str) -> Path:
     """Subpasta dedicada da campanha em exports/, criada on-demand."""
     d = settings.EXPORTS_DIR / campaign_id

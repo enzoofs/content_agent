@@ -12,6 +12,7 @@
   --cream: #F5F0E8;
   --white: #FFFFFF;
   --red: #B0413E;
+  --green: #3F6B4A;
 
   /* Tinta (hierarquia sobre creme) */
   --ink-1: #272D4D;
@@ -306,6 +307,10 @@ body {
 .badge-pending { background: rgba(227,182,68,0.18); color: var(--gold-deep); border: 1px solid var(--gold); }
 .badge-approved { background: var(--gold); color: var(--navy); }
 .badge-error { background: rgba(176,65,62,0.12); color: var(--red); border: 1px solid var(--red); }
+.badge-published { background: rgba(63,107,74,0.14); color: var(--green); border: 1px solid var(--green); }
+/* Atraso: vermelho contido, não alarmista — mesmo tom do badge-error mas
+   sem borda sólida, pra diferenciar "erro do sistema" de "esqueceu de postar". */
+.badge-late { background: rgba(176,65,62,0.10); color: var(--red); border: 1px dashed var(--red); }
 
 /* ---------- Dashboard ---------- */
 .dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
@@ -982,6 +987,9 @@ body {
   transition: background var(--duration-fast) var(--ease-out);
 }
 .cal-chip:hover { background: var(--navy-dark); }
+/* Atraso: borda sutil no chip, não troca a cor de fundo — o navy é a
+   assinatura visual do calendário, o aviso muda o entorno, não o objeto. */
+.cal-chip-atrasada { box-shadow: 0 0 0 1.5px var(--red); }
 .cal-vazio {
   text-align: center;
   color: var(--ink-3);

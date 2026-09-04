@@ -126,10 +126,17 @@ def marcar_aprovada(campaign_id: str, option_id: int, data_agendada: str | None 
     )
 
 
-def marcar_publicada(campaign_id: str) -> None:
-    """Marca a campanha como publicada (via publisher.py) — não publica de novo."""
+def marcar_publicada(campaign_id: str, publicado_em: str | None = None) -> None:
+    """
+    Marca a campanha como publicada — não publica de novo (usado pelo
+    publish_scheduler automático E pelo botão manual "Marquei como
+    publicado" da UI, ver docs/plans/2026-05-23-status-postagem-e-kanban.md).
+
+    Args:
+        publicado_em: ISO 8601. None = agora (caso comum: "postei agora mesmo").
+    """
     from datetime import datetime
-    agora = datetime.now().isoformat(timespec="seconds")
+    agora = publicado_em or datetime.now().isoformat(timespec="seconds")
     write_state(campaign_id, publicado_em=agora, publish_erro=None)
 
 
