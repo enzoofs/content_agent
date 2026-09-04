@@ -1,21 +1,24 @@
 # Arquitetura — Mendes & Vaz Social
 
 > Documento vivo. Objetivo: alguém novo entender o sistema em 15 min.
-> Última atualização: 2026-05-25.
+> Última atualização: 2026-09-04.
 >
-> **Contexto atual:** sistema desenhado pra 1 cliente (Mendes & Vaz). Em
-> transição pra multi-marca (Gui DJ entrando como cliente #2). A arquitetura
-> abaixo descreve o estado atual; o que muda na expansão está em
-> `docs/fase-2-roadmap.md` (especialmente item 5.7 — brand config dinâmico).
+> **Contexto atual:** cliente pagante (Mendes & Vaz), em produção no
+> Fly.io. Em transição pra multi-marca (Gui DJ entrando como cliente #2,
+> ainda não onboardado). A arquitetura abaixo descreve o estado atual; o
+> que muda na expansão está em `docs/fase-2-roadmap.md` (especialmente
+> item 5.7 — brand config dinâmico).
 
 ---
 
 ## 1. Visão geral em 30 segundos
 
-Sistema **local, single-user** que automatiza criação de posts pra Instagram/LinkedIn
-de um escritório de advocacia. **Texto sempre renderizado por código** (nunca dentro
-de imagem IA — princípio inegociável). **Henrique aprova tudo** — nada publica
-automaticamente.
+Sistema **hospedado (Fly.io), single-tenant hoje** que automatiza criação de posts
+pra Instagram/LinkedIn de um escritório de advocacia. **Texto sempre renderizado
+por código** (nunca dentro de imagem IA — princípio inegociável). **Henrique aprova
+tudo antes de qualquer coisa ir ao ar** — publicação automática (`modules/publisher.py`)
+existe como infra opcional, ainda desligada pro M&V, e só publica o que já passou
+pela aprovação; não é geração sem humano no loop.
 
 ```
 [ Henrique ] ── browser → [ Flask + waitress ]
@@ -49,7 +52,11 @@ automaticamente.
 | **Geração copy** | `modules/copy_generator.py` | OpenAI + system prompt + retry + validação JSON. | Trocar prompt, novo provedor LLM |
 | **Geração imagem** | `modules/image_generator.py` | Ideogram + fallback placeholder. | Trocar provedor, novo tamanho |
 | **Composição** | `modules/composer.py` | HTML/CSS → PNG via Playwright. Embute fontes/logo/imagem como data URI. | Novo formato, novo template |
-| **Exportação** | `modules/exporter.py` | Copia PNG aprovado + JSON metadata + post.txt. | Novo destino de export (S3, etc) |
+| **Exportação** | `modules/exporter.py` | Copia PNG aprovado + JSON metadata + post.txt. Também registra o audit log (`exports/audit.jsonl`), incluindo publicação manual. | Novo destino de export (S3, etc) |
+| **Publicação** | `modules/publisher.py` | Abstração `Publisher` + `BlotatoPublisher` — publica automaticamente no Instagram. **Não testado contra API real** (sem chave neste ambiente) — ver aviso no topo do arquivo sobre URL pública da imagem. | Trocar provedor (Buffer, Meta direto) |
+| **Agendador de publicação** | `modules/publish_scheduler.py` | Thread daemon (mesmo padrão de `backup.py`) que publica campanhas aprovadas na data agendada, via `publisher.py`. Sem `BLOTATO_API_KEY`/`blotato_account_id`, não faz nada (não é fatal). | Mudar frequência, lógica de retry |
+| **Sugestão de tema** | `modules/theme_suggester.py` | Sugere tema de campanha a partir do histórico recente (OpenAI, com fallback local). Usado pelo fluxo de geração automática via bot de WhatsApp. | Mudar heurística/prompt de sugestão |
+| **Sugestão de agenda** | `modules/scheduling.py` | Heurística v1 de melhor dia/horário pra postar. Sem dados reais de engajamento ainda (Fase 4 do roadmap). | Trocar por lógica data-driven quando houver analytics |
 | **Briefing** | `modules/briefing_parser.py` | Valida campos + sanitização anti-prompt-injection. | Novo campo de briefing |
 | **HTTP/UI** | `modules/server.py` | Flask + waitress + serve SPA. | Novo endpoint |
 | **SPA** | `approval_ui/` | Vanilla JS. 4 telas: dashboard, novo, progresso, aprovação. | UI nova |
@@ -100,7 +107,7 @@ campaigns
 ├── tom                   TEXT   -- tecnico | acessivel
 ├── objetivo              TEXT   -- awareness | captacao | posicionamento
 ├── tema_especifico       TEXT
-├── formato               TEXT   -- square | portrait | carousel
+├── formato               TEXT   -- square | portrait | carousel | story
 ├── num_slides            INT
 ├── referencias           TEXT
 ├── created_at            TEXT
@@ -108,9 +115,20 @@ campaigns
 ├── etapa                 TEXT   -- copy | arte | composicao (durante gerando)
 ├── copy_version          INT    -- 1 inicial, bumpa em cada regeração
 ├── option_aprovada       INT
-├── data_agendada         TEXT
+├── data_agendada         TEXT   -- YYYY-MM-DD (sem horário — ver scheduling.py)
 ├── erro                  TEXT
-└── atualizado_em         TEXT
+├── atualizado_em         TEXT
+├── tokens_used           INT
+├── hide_overlay          INT    -- 0/1 — esconde a sombra sobre a imagem
+├── overlay_color         TEXT   -- azul (default) | preto
+├── upload_filename       TEXT   -- foto própria (formatos simples), "" = via IA
+├── upload_filenames      TEXT   -- JSON: 1 foto por slide (carrossel), [] = via IA
+├── font_variant          TEXT   -- id de FontOption do brand
+├── font_size             TEXT   -- P | M | G
+├── image_asset_id        TEXT   -- reaproveita imagem do banco (B.5)
+├── layout                TEXT   -- id de LayoutOption do brand
+├── publicado_em          TEXT   -- setado por publish_scheduler.py OU pelo botão manual
+└── publish_erro          TEXT   -- última falha de publicação automática (se houver)
 
 copy_versions               PRIMARY KEY (campaign_id, versao)
 ├── campaign_id   FK
@@ -121,6 +139,14 @@ copy_versions               PRIMARY KEY (campaign_id, versao)
 
 briefing_templates          AUTOINCREMENT id
 └── (mesmos campos do briefing) + UNIQUE(nome)
+
+image_assets                PK id (UUID)
+├── brand_slug            TEXT
+├── origem_campaign_id    TEXT
+├── origem                TEXT   -- ideogram | upload
+├── formato               TEXT
+├── filename              TEXT
+└── created_at            TEXT
 ```
 
 **Por que SQLite?** Single-user, single-host MVP. WAL permite ler enquanto a
@@ -160,8 +186,17 @@ matam performance de queries.
                   ┌────────────┐        │
                   │  aprovada  │ ◄──────┘
                   └────────────┘
-                  (estado terminal)
+                  (estado terminal do workflow de geração)
 ```
+
+`status="aprovada"` é terminal no backend, mas tem um ciclo de vida
+**derivado** de publicação por cima (não migra o enum — ver
+`docs/plans/2026-05-23-status-postagem-e-kanban.md`): a UI computa
+Agendada / Atrasada ⚠ / Publicada ✓ a partir de `data_agendada` +
+`publicado_em` + hoje (`statusInfo()` em `approval_ui/app.js`). Publicação
+em si acontece via `modules/publish_scheduler.py` (automático, Blotato)
+ou pelo botão manual "Marquei como publicado" — nenhum dos dois muda
+`status`, só grava `publicado_em`.
 
 ---
 
@@ -195,7 +230,9 @@ matam performance de queries.
 | Novo endpoint HTTP | `modules/server.py` (mantém padrão `/api/<recurso>`) |
 | Trocar prompt do LLM | `modules/copy_generator.py` (SYSTEM_PROMPT ou SYSTEM_PROMPT_CAROUSEL) |
 | Nova validação de briefing | `modules/briefing_parser.py` (`parse` function) |
-| Mudar layout do post | `templates/*.html` — CSS literal, placeholders `$variavel` |
+| Nova cor de sombra sobre a imagem | `modules/composer.py` (`_OVERLAY_RGB`) + `briefing_parser.OVERLAY_COLORS_VALIDAS` — cor é fixa do sistema, não por brand |
+| Publicar automaticamente num provedor novo | `modules/publisher.py` (implementa `Publisher`, troca `BlotatoPublisher`) — `publish_scheduler.py` não muda |
+| Novo status de publicação/UI | `approval_ui/app.js` (`statusInfo`) — deriva de `status`+`data_agendada`+`publicado_em`, não migra enum no backend |
 
 ---
 
@@ -203,16 +240,18 @@ matam performance de queries.
 
 - ❌ ORM (SQL direto em `store.py` — schema cabe na cabeça)
 - ❌ Build step de frontend (vanilla JS direto no browser)
-- ❌ Docker (app local, `pip install` resolve)
-- ❌ CI/CD (single dev, push direto)
-- ❌ Logger estruturado (`print()` + `utils.log()` por campanha — basta pra MVP)
-- ❌ Auth (single user assumido — quebra na fase 2)
-- ❌ Multi-tenant (single client — quebra na fase 2)
+- ❌ CI/CD (single dev, push direto — inclusive deploy é manual, `fly deploy`)
+- ❌ Logger estruturado (`print()` + `utils.log()` por campanha — basta pro tamanho atual)
+- ❌ Multi-tenant de verdade (DB/config isolado por cliente — hoje é 1 DB compartilhado + brand config por client_slug; quebra quando o 2º cliente pagante entrar de vez)
 - ❌ Cache (3 opções por campanha são únicas, não compensa)
-- ❌ Message broker / fila persistente (threads daemon bastam pra 1 usuário)
+- ❌ Message broker / fila persistente (threads daemon bastam pro volume atual)
 - ❌ LangChain / agents framework (LLM como gerador de texto estruturado, só)
 
-**Todas essas ausências têm fix planejado em `docs/fase-2-roadmap.md`.**
+**Já existe, ao contrário do que versões antigas deste doc diziam:**
+- ✅ **Docker** — `Dockerfile` na raiz, usado pelo deploy no Fly.io (não é mais "só local").
+- ✅ **Auth básica** — `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` (env vars) protegem a SPA em produção via `server.py:_require_basic_auth`. Não é auth por usuário/permissão (isso sim ainda não existe), mas não é mais "zero auth".
+
+**As ausências reais acima têm fix planejado em `docs/fase-2-roadmap.md`.**
 
 ---
 

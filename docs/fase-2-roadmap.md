@@ -1,11 +1,33 @@
 # Fase 2 — Roadmap Técnico (pós-validação Mendes & Vaz)
 
 > **Pré-requisito:** Mendes & Vaz validou o MVP e topou fechar negócio.
+> ✅ **Feito** — cliente pagante desde 31/08/2026.
 > **Objetivo:** transformar MVP local single-user em SaaS multi-cliente
 > hospedado, capaz de atender 3-5 escritórios em produção real.
 >
 > **Estimativa total:** ~10-12 dias úteis de 1 dev sênior.
 > **Custo de infra:** $20-50/mês na fase 2.
+>
+> **Status real em 2026-09-04** (checkboxes abaixo não foram atualizadas
+> item a item — isto resume o que já mudou de fato):
+> - ✅ Bloco 3 (deploy) em boa parte feito, mas **via Fly.io**, não Railway
+>   como o doc sugeria: Dockerfile real (base `mcr.microsoft.com/playwright/
+>   python`, não `python:3.11-slim`), HTTPS automático, `GET /health`,
+>   variáveis via `fly secrets` (não no repo). Domínio próprio
+>   (`mendesvaz.timelabs.com.br`) NÃO feito — usa o domínio padrão do Fly.
+>   Ainda em `waitress`, não `gunicorn`.
+> - ✅ Auth básica existe (`BASIC_AUTH_USER`/`PASS`) — não é o sistema de
+>   usuários/roles do Bloco 1 (isso continua não feito), mas não é mais
+>   "zero auth" na frente pública.
+> - ❌ Bloco 1 (multi-usuário/tenants/roles), Bloco 2 (Postgres, R2) — nada
+>   disso foi feito. Ainda SQLite + filesystem local (volume Fly.io).
+> - ✅ Item 5.7 (brand config dinâmico) — parcial: layout, cor de sombra e
+>   fonte já são dado por brand (`config/brands/`), mas o Gui ainda não
+>   tem brand próprio criado.
+> - ✅ Publicação automática (item 5.4, citado como "o que justifica preço
+>   de SaaS") — infra escrita (`modules/publisher.py` +
+>   `publish_scheduler.py`, via Blotato), **não testada contra API real**,
+>   não conectada pro M&V ainda.
 
 ---
 

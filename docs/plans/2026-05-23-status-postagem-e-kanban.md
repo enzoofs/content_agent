@@ -1,8 +1,17 @@
-# Status de postagem & Kanban (engavetado)
+# Status de postagem & Kanban (Fase A concluída, Kanban engavetado)
 
 > Plano técnico discutido em sessão de redesign visual da Central de Controle.
 > Data: 2026-05-23. Autor: Enzo Ferraz + Claude Code.
 > Relacionado: [`roadmap-e-melhorias.md`](../roadmap-e-melhorias.md) (Fase 2 — Distribuição).
+>
+> **Atualização 2026-09-04**: Fase A (abaixo) implementada — commit `3d2ece1`.
+> `publicado_em`/`publish_erro` existem em `campaigns` (SQLite), endpoint
+> `POST /api/campaigns/<id>/marcar-publicado`, status derivado no frontend
+> (`statusInfo()` em `approval_ui/app.js`) e aviso visual de atraso no
+> calendário. Fase B (automática) também ganhou uma primeira versão no
+> mesmo dia via `modules/publisher.py` + `modules/publish_scheduler.py`
+> (Blotato) — ver `docs/arquitetura.md`. Kanban continua engavetado; nada
+> mudou nos critérios de reabertura da seção 3.
 
 ---
 

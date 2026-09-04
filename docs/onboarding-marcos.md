@@ -3,7 +3,10 @@
 > Documento de entrada pro Marcos. Le isto antes de qualquer outra coisa.
 > Tempo estimado de leitura: 25 min. Tempo ate primeiro commit: ~1 hora.
 >
-> Autor: Enzo Ferraz · Atualizado em 2026-05-25
+> Autor: Enzo Ferraz · Atualizado em 2026-09-04 (revisão geral — a versão
+> anterior falava de uma demo de maio que já aconteceu há 4 meses; se você
+> está lendo isto, é porque estava desatualizado e alguém corrigiu — bom
+> sinal, é assim que este doc deveria funcionar. Ver nota no rodapé.)
 
 ---
 
@@ -17,35 +20,37 @@ no painel pra o cliente aprovar. So depois de aprovado e que vira post pronto
 pra ir no Instagram/LinkedIn.
 
 **Quem usa hoje:**
-Henrique Mendes, do escritorio **Mendes & Vaz** (Belo Horizonte). MVP rodando
-local na maquina dele. Demo agendada pra **quinta-feira 28/05/2026**.
+Henrique Mendes, do escritorio **Mendes & Vaz** (Belo Horizonte) — **cliente
+pagante**, R$247/mes, rodando em producao no Fly.io (nao mais local). Demo
+de maio ja aconteceu e fechou o contrato.
 
 **Quem vai usar em breve:**
-- **Gui** (DJ + criador de conteudo) — primeiro cliente multi-marca.
+- **Gui** (DJ + criador de conteudo) — primeiro cliente multi-marca, ainda
+  nao onboardado.
 - Possivel **agencia de marketing** via rede do Gui — santo graal B2B2C.
 
 **Por que importa pra TimeLabs:**
 E o primeiro produto de **conteudo automatizado** da empresa. Se virar SaaS
-com 5-10 escritorios/criadores pagantes a R$ 300-500/mes, vira fluxo de
-receita recorrente independente das automacoes N8N sob demanda.
+com 5-10 escritorios/criadores pagantes, vira fluxo de receita recorrente
+independente das automacoes N8N sob demanda.
 
 ---
 
-## 2. Status agora (semana de 25/05/2026)
+## 2. Status agora (2026-09-04)
 
 | Item | Status |
 |---|---|
-| MVP funcional pra Mendes & Vaz | Pronto |
-| Testes automatizados (unit + smoke) | 60 testes passando |
-| Demo agendada | Quinta 28/05 |
-| Brand config dinamico (multi-cliente) | Planejado pra apos a demo |
+| MVP pra Mendes & Vaz | Em producao (Fly.io), pagante |
+| Testes automatizados (unit + smoke) | ~130 passando |
+| Brand config dinamico (multi-cliente) | Parcial — layout, cor de sombra e fonte ja sao dado por brand; Gui ainda nao tem brand proprio criado |
+| Seletor de layout visual (3 opcoes) | Pronto |
+| Upload multi-foto no carrossel | Pronto |
+| Publicacao automatica (Instagram, via Blotato) | Infra escrita, **nao testada contra API real**, nao conectada ainda |
+| Bot de WhatsApp (lembrete + sugestao de tema) | Nao iniciado — depende de decisao de provedor (Z-API) |
 | Edicao de video automatizada | Descartado por enquanto (ver `video-editing-research.md`) |
-| Deploy em producao | Ainda nao — roda local |
 
-**ATENCAO — congelamento ate quinta-feira:**
-Ate a demo do Henrique acontecer (28/05 a noite), o codigo no `main` deve
-ficar **estavel e validado**. Nenhuma mudanca em arquivos que afetem
-geracao de PNG. Detalhes na secao 8.
+Nao ha congelamento de codigo agora — isso so existiu na semana da demo de
+maio (historico, nao se aplica mais). Trabalhe normal: branch, PR, testes.
 
 ---
 
@@ -69,8 +74,11 @@ python -m venv venv
 source venv/bin/activate          # Linux/Mac
 # venv\Scripts\activate           # Windows
 
-# Dependencias Python
-pip install -r requirements.txt
+# Dependencias Python — use `python -m pip`, NAO so `pip`. Em algumas
+# maquinas Windows o `pip` solto resolve pro pip global em vez do pip do
+# venv ativo (sintoma: "Defaulting to user installation..." e libs fora
+# do venv). `python -m pip` garante que e o pip certo.
+python -m pip install -r requirements.txt
 
 # Chromium do Playwright (~150MB)
 playwright install chromium
@@ -239,46 +247,37 @@ rm -rf campaigns/ exports/ state.db
 
 ---
 
-## 8. O que NAO mexer agora (ate apos 28/05)
+## 8. Onde ter cuidado extra (sem congelamento, mas com disciplina)
 
-Demo do Henrique e quinta. Ate la, codigo do `main` esta **congelado** pra
-qualquer mudanca em:
+Nao ha mais janela de congelamento — o M&V ja e cliente pagante em
+producao, entao qualquer regressao afeta uso real, nao uma demo:
 
-| Area | Arquivos | Por que nao mexer |
+| Area | Arquivos | Por que ter cuidado |
 |---|---|---|
-| Pipeline de geracao | `modules/pipeline.py`, `modules/copy_generator.py`, `modules/image_generator.py`, `modules/composer.py` | Qualquer regressao quebra a demo |
-| Configuracao visual | `config/settings.py` (COLORS, FONTS, LOGO_PATH, TEMPLATES) | Visual ja validado |
-| Templates HTML | `templates/*.html` | Idem |
-| Schema de DB | `modules/store.py` (SCHEMA_SQL) | Migration durante demo = desastre |
+| Pipeline de geracao | `modules/pipeline.py`, `modules/copy_generator.py`, `modules/image_generator.py`, `modules/composer.py` | Regressao quebra geracao de campanha pro cliente pagante |
+| Schema de DB | `modules/store.py` (SCHEMA_SQL) | Migracao mal feita corrompe `state.db` em producao (volume Fly.io) |
+| Deploy | `fly.toml`, `Dockerfile` | Erro aqui derruba a app do M&V |
 
-**O que da pra mexer sem risco:**
-- Documentacao (`docs/`, `README.md`, este arquivo)
-- Testes novos (sem alterar codigo de producao)
-- Scripts em `scripts/`
-- Branch propria de exploracao (so nao mergeia)
-
-Apos quinta a noite, congelamento sai e a gente entra na fase 2 (brand
-config dinamico, multi-marca pro Gui — ver `docs/fase-2-roadmap.md`).
+**Regra geral do projeto** (ver `CLAUDE.md` na raiz — leia antes de tudo):
+mudancas cirurgicas, so o que foi pedido, plano antes de codar mudanca
+nao-trivial, rodar `pytest` antes de commitar. E a cada feature nova pra
+multi-marca, perguntar: "isso vale pra Mendes & Vaz E pro Gui?" — se so
+vale pra um, e brand config, nao codigo.
 
 ---
 
-## 9. Roadmap proximas semanas — onde tem trabalho
+## 9. Onde tem trabalho agora
 
-Pos-demo (a partir de 29/05), na ordem:
-
-| # | Trabalho | Esforco | Quem (provavelmente) |
+| # | Trabalho | Status | Depende de |
 |---|---|---|---|
-| 1 | **Brand config dinamico** (extrair `settings.COLORS/FONTS/LOGO` pra arquivo por cliente) | 2-3 dias | A definir |
-| 2 | **Briefing/templates adaptados pra contexto do Gui (DJ)** | 2-3 dias | A definir |
-| 3 | **Doc de prompts em `config/prompts.py`** (mover string longa do `copy_generator.py`) | 4h | Bom 1o PR |
-| 4 | **Logger estruturado** (substituir `print()` por `logging`) | 4h | Bom 1o PR |
-| 5 | **`ruff` + `mypy` configurados** | 2h | Bom 1o PR |
-| 6 | **Deploy em VPS/Railway** | 1-2 dias | Enzo provavelmente |
+| 1 | Conectar Instagram do M&V no Blotato + resolver URL publica da imagem (ver aviso em `modules/publisher.py`) | Bloqueado | Enzo criar a conta Blotato |
+| 2 | Bot de WhatsApp (lembrete + sugestao de tema + gatilho de geracao) | Nao iniciado | Decisao Z-API (ja escolhido, falta configurar) |
+| 3 | Brand novo pro Gui (`config/brands/gui_*.py`) | Nao iniciado | Gui fechar como cliente |
+| 4 | `ruff` + `mypy` configurados | Nao iniciado | Bom 1o PR |
+| 5 | Logger estruturado (substituir `print()` por `logging` nos schedulers) | Nao iniciado | Bom 1o PR |
 
-**Sugestoes de primeiro PR pra Marcos** (baixo risco, alto aprendizado):
-- Item 3 ou 4 ou 5 da tabela acima. Sao itens da "pre-cirurgia" da fase 2
-  (ver `docs/fase-2-roadmap.md` secao "Pre-cirurgia").
-- Le o codigo correspondente, abre branch, faz, testa, abre PR.
+**Sugestao de primeiro PR pra Marcos**: item 4 ou 5 — baixo risco, te
+obriga a ler boa parte do código sem mexer em lógica de produto.
 
 ---
 
@@ -290,7 +289,6 @@ Pos-demo (a partir de 29/05), na ordem:
 - `docs/arquitetura.md` — fluxo + modelo de dados + atalhos
 - `docs/fase-2-roadmap.md` — plano de evolucao pra SaaS
 - `docs/roadmap-e-melhorias.md` — auditoria tecnica do MVP
-- `docs/demo-checklist.md` — roteiro da demo de quinta
 - `docs/video-editing-research.md` — relatorio sobre video (descartado por
   enquanto, mas le se a discussao voltar)
 
