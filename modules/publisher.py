@@ -9,24 +9,17 @@ resto do sistema continuam iguais.
 
 ⚠️ NÃO TESTADO CONTRA A API REAL — escrito a partir da documentação pública
 do Blotato (blotato.com + help.blotato.com), sem conta/chave disponível
-neste ambiente. Antes de rodar em produção:
-  1. Confirmar os nomes exatos dos campos com uma chamada real
-     (`list_accounts()` primeiro é o teste mais barato).
-  2. Resolver o problema do "ponto 3" abaixo (URL pública da imagem).
+neste ambiente. Antes de rodar em produção, confirmar os nomes exatos dos
+campos com uma chamada real (`list_accounts()` primeiro é o teste mais
+barato).
 
-Ponto 3 — imagem precisa ser alcançável pela Blotato:
-    A API do Blotato aceita ou uma URL pública em `mediaUrls`, ou upload via
-    endpoint de "presigned upload" (não documentado em detalhe aqui). Como a
-    central roda com Basic Auth em produção (`server.py:_require_basic_auth`),
-    uma URL tipo `/composed/<cid>/<file>` NÃO é alcançável pela Blotato sem
-    autenticação. Duas saídas, a escolher antes de ativar isto de verdade:
-      (a) Isentar `/composed/`/`/exports/` do Basic Auth (mais simples, mas
-          expõe os PNGs sem autenticação — aceitável? nome de arquivo já é
-          um UUID/campaign_id, não é adivinhável).
-      (b) Usar o endpoint de upload direto do Blotato (mais seguro, precisa
-          de teste com a chave real pra confirmar o formato).
-    `_media_urls()` abaixo implementa (a) por ser o caminho mais simples;
-    trocar pra (b) é local e não afeta o resto do módulo.
+Resolvido (2026-09-04): a URL pública da imagem exportada
+(`/exports/<cid>/<file>`, ver `server.py`) já existe e está isenta do
+Basic Auth de propósito — Blotato consegue buscar sem credencial. Risco
+aceito: nome do arquivo carrega o campaign_id (não sequencial/enumerável),
+e só o que já foi aprovado/exportado fica lá. Se um dia isso incomodar,
+a alternativa é o endpoint de "presigned upload" do Blotato — não
+implementado aqui, precisa de chave real pra confirmar o formato exato.
 """
 
 from __future__ import annotations
@@ -125,9 +118,9 @@ class BlotatoPublisher:
 
 def _media_urls(image_paths: list[Path]) -> list[str]:
     """
-    Converte paths locais dos PNGs exportados em URLs públicas que a Blotato
-    consegue buscar. Ver aviso do "ponto 3" no docstring do módulo — hoje
-    assume que `/exports/<cid>/<arquivo>` está fora do Basic Auth.
+    Converte paths locais dos PNGs exportados em URLs públicas que a
+    Blotato consegue buscar sem credencial (rota `/exports/` isenta do
+    Basic Auth — ver `server.py`).
     """
     urls = []
     for p in image_paths:

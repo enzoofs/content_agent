@@ -664,8 +664,14 @@ def build_app() -> Flask:
     if _auth_user and _auth_pass:
         @app.before_request
         def _require_basic_auth():
-            # /health fica sempre aberto pra Fly conseguir checar
-            if request.path == "/health":
+            # /health fica sempre aberto pra Fly conseguir checar.
+            # /exports/ fica aberto pro Blotato conseguir buscar o PNG
+            # aprovado na hora de publicar (ver modules/publisher.py) —
+            # provedor externo não tem como mandar usuário/senha na
+            # requisição. Risco aceito: nome do arquivo carrega o
+            # campaign_id (não é enumerável por sequência), e só PNGs já
+            # aprovados/exportados ficam ali — não é o banco de rascunhos.
+            if request.path == "/health" or request.path.startswith("/exports/"):
                 return None
             auth = request.authorization
             ok = (
@@ -740,6 +746,16 @@ def build_app() -> Flask:
     @app.route("/composed/<cid>/<path:filename>")
     def composed(cid: str, filename: str):
         return send_from_directory(settings.CAMPAIGNS_DIR / cid / "composed", filename)
+
+    @app.route("/exports/<cid>/<path:filename>")
+    def exports_file(cid: str, filename: str):
+        """
+        Serve PNG/metadata já exportados (aprovados). Fica FORA do Basic
+        Auth de propósito — ver exceção em `_require_basic_auth` acima —
+        porque o `publish_scheduler.py` manda essa URL pra Blotato buscar
+        na hora de publicar automaticamente.
+        """
+        return send_from_directory(settings.EXPORTS_DIR / cid, filename)
 
     # ---- API ----
     @app.route("/api/campaigns", methods=["GET"])

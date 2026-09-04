@@ -208,6 +208,40 @@ def test_marcar_publicado_404_campanha_inexistente(client):
     assert resp.status_code == 404
 
 
+def test_exports_serve_arquivo_estatico(client):
+    """/exports/<cid>/<file> serve o PNG exportado direto — usado pelo publisher.py."""
+    export_dir = settings.EXPORTS_DIR / CID
+    export_dir.mkdir(parents=True, exist_ok=True)
+    (export_dir / "option1.png").write_bytes(b"PNGDATA")
+    try:
+        resp = client.get(f"/exports/{CID}/option1.png")
+        assert resp.status_code == 200
+        assert resp.data == b"PNGDATA"
+    finally:
+        shutil.rmtree(export_dir, ignore_errors=True)
+
+
+def test_exports_fica_isento_do_basic_auth(monkeypatch):
+    """Blotato não manda usuário/senha — /exports/ precisa responder sem Basic Auth."""
+    monkeypatch.setenv("BASIC_AUTH_USER", "henrique")
+    monkeypatch.setenv("BASIC_AUTH_PASS", "segredo")
+    monkeypatch.setattr(server, "_iniciar_geracao_async", lambda briefing: None)
+    monkeypatch.setattr(server, "_iniciar_regeracao_async", lambda cid, nota: None)
+    app = server.build_app()
+    app.config.update(TESTING=True)
+    client_com_auth = app.test_client()
+
+    export_dir = settings.EXPORTS_DIR / CID
+    export_dir.mkdir(parents=True, exist_ok=True)
+    (export_dir / "option1.png").write_bytes(b"PNGDATA")
+    try:
+        # Sem credencial nenhuma: /exports/ passa, qualquer outra rota é bloqueada.
+        assert client_com_auth.get(f"/exports/{CID}/option1.png").status_code == 200
+        assert client_com_auth.get("/api/campaigns").status_code == 401
+    finally:
+        shutil.rmtree(export_dir, ignore_errors=True)
+
+
 def test_approve_data_passada_400(client, monkeypatch):
     client.post("/api/campaigns", json=_briefing_body())
     _seed_copy_e_composed()
