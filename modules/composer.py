@@ -56,6 +56,23 @@ def _resolve_overlay_rgb(overlay_color: str) -> str:
     return _OVERLAY_RGB.get((overlay_color or "").strip(), _OVERLAY_RGB[_OVERLAY_COLOR_DEFAULT])
 
 
+def _hex_to_rgb_string(hex_color: str) -> str:
+    """
+    "#1A2038" -> "26, 32, 56" — pra usar dentro de `rgba(..., alpha)` no CSS.
+
+    Templates que precisam de transparência numa cor do brand (ex: caixa
+    semi-opaca do layout faixa) não podem simplesmente fazer
+    `rgba($navy_dark, 0.85)` — rgba() exige componentes separados por
+    vírgula, não um hex. Esta função faz essa conversão uma vez, no
+    Python, em vez de cada template reimplementar (ou, como aconteceu no
+    layout faixa, esquecer e deixar um navy hardcoded que não respeita o
+    brand ativo).
+    """
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"{r}, {g}, {b}"
+
+
 def _default_layout_option() -> LayoutOption:
     """Fallback quando o brand ativo não define `layout_options` (legado)."""
     return LayoutOption(id=settings.DEFAULT_LAYOUT, label="Default")
@@ -170,6 +187,7 @@ def _build_html(
         "gold": settings.COLORS["gold"],
         "navy": settings.COLORS["navy"],
         "navy_dark": settings.COLORS["navy_dark"],
+        "navy_dark_rgb": _hex_to_rgb_string(settings.COLORS["navy_dark"]),
         "background_image": _data_uri(image_path),
         "logo": _data_uri(settings.LOGO_PATH),
         "font_heading_family": font_option.heading_family,
