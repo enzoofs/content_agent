@@ -173,8 +173,10 @@ BRAND = Brand(
         ),
     ),
 
-    # TODO B.3: substituir por logo typographic via CSS (sem PNG).
-    logo_path=_ASSETS / "logo_mendes_vaz.png",
+    # Wordmark simples (Anton, transparente) — resolve o TODO antigo que
+    # reaproveitava o logo do M&V como placeholder. Ainda não é um logo de
+    # verdade do Gui (ele não tem um), mas já não confunde numa demo.
+    logo_path=_ASSETS / "logos" / "logo_gui_raw.png",
 
     # Fotografia de evento (DJ booth, iluminação cinematográfica, contexto
     # de nightlife BR). Sem palácios, sem clichê de "festa de luxo".
